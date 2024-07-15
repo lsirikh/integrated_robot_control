@@ -1,43 +1,104 @@
 import os
 
 from ament_index_python.packages import get_package_share_directory
-
-import launch
-import launch_ros.actions
-
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch.substitutions import ThisLaunchFileDir
+from launch_ros.actions import Node
 
 def generate_launch_description():
-    joy_config = launch.substitutions.LaunchConfiguration('joy_config')
-    joy_dev = launch.substitutions.LaunchConfiguration('joy_dev')
-    config_filepath = launch.substitutions.LaunchConfiguration('config_filepath')
-
+    pico_port = LaunchConfiguration('pico_port', default='/dev/ttyACM0')
+    rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/rplidar')
+    imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
+    joy_config = LaunchConfiguration('joy_config', default='ps4')
+    joy_dev = LaunchConfiguration('joy_dev', default='/dev/input/js0')
+    config_filepath = LaunchConfiguration('config_filepath', default=[
+        LaunchConfiguration('config_dir'), '/', joy_config, '.config.yaml'
+    ])
     ekf_config = os.path.join(get_package_share_directory('integrated_robot_control'), 'config', 'ekf.yaml')
+    config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
 
-    return launch.LaunchDescription([
-        launch.actions.DeclareLaunchArgument('joy_config', default_value='ps4'),
-        launch.actions.DeclareLaunchArgument('joy_dev', default_value='/dev/input/js0'),
-        launch.actions.DeclareLaunchArgument('config_filepath', default_value=[
-            launch.substitutions.TextSubstitution(text=os.path.join(
-                get_package_share_directory('integrated_robot_control'), 'config', '')),
-            joy_config, launch.substitutions.TextSubstitution(text='.config.yaml')]),
-
-        launch_ros.actions.Node(
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'pico_port',
+            default_value=pico_port,
+            description='Serial port for communication with microcontroller'
+        ),
+        DeclareLaunchArgument(
+            'rplidar_port',
+            default_value=rplidar_port,
+            description='Port for rplidar sensor'
+        ),
+        DeclareLaunchArgument(
+            'imu_port',
+            default_value=imu_port,
+            description='Serial port for IMU'
+        ),
+        DeclareLaunchArgument(
+            'joy_config',
+            default_value=joy_config,
+            description='Configuration for joystick'
+        ),
+        DeclareLaunchArgument(
+            'joy_dev',
+            default_value=joy_dev,
+            description='Joystick device'
+        ),
+        DeclareLaunchArgument(
+            'config_dir',
+            default_value=config_dir,
+            description='Configuration directory'
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [ThisLaunchFileDir(), '/lidar.launch.py']
+            ),
+            launch_arguments={'serial_port': rplidar_port}.items()
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [ThisLaunchFileDir(), '/imu.launch.py']
+            ),
+            launch_arguments={'port': imu_port}.items()
+        ),
+        Node(
             package='joy', executable='joy_node', name='joy_node',
             parameters=[{
                 'dev': joy_dev,
                 'deadzone': 0.2,
                 'autorepeat_rate': 20.0,
             }],
-            output='screen'),
-        launch_ros.actions.Node(
+            output='screen'
+        ),
+        Node(
             package='teleop_twist_joy', executable='teleop_node',
             name='teleop_twist_joy_node', parameters=[config_filepath],
-            output='screen'),
-        launch_ros.actions.Node(
-            package='robot_localization', executable='ekf_node',
-            name='ekf_se_odom', output='screen',
-            parameters=[ekf_config]),
-        launch_ros.actions.Node(
+            output='screen'
+        ),
+        Node(
+            package='integrated_robot_control', executable='ekf_node',
+            name='ekf_node', 
+            output='screen',
+            parameters=[ekf_config]
+        ),
+        Node(
             package='integrated_robot_control', executable='control_node',
-            name='control_node', output='screen'),
+            name='control_node', 
+            output='screen',
+            parameters=[{'pico_port': pico_port}]
+        ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            arguments=['-0.064', '0', '0.120', '0', '0', '0', 'base_link', 'laser'],
+            output='screen'
+        ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            arguments=['0', '0', '0.0325', '0', '0', '0', 'base_link', 'base_footprint'],
+            output='screen'
+        )
     ])
