@@ -26,6 +26,8 @@ setup(
         'console_scripts': [
             'control_node = integrated_robot_control.control_node:main',
             'robot_control_node = integrated_robot_control.rpi_robot_control:main',
+            'ekf_node = integrated_robot_control.ekf_node:main',  # ekf_node 추가
+
         ],
     },
 )
