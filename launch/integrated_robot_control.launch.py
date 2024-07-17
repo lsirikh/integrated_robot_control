@@ -90,6 +90,11 @@ def generate_launch_description():
             parameters=[{'pico_port': pico_port}]
         ),
         Node(
+            package='integrated_robot_control', executable='data_report_node',
+            name='data_report_node', 
+            output='screen',
+        ),
+        Node(
             package='tf2_ros',
             executable='static_transform_publisher',
             arguments=['-0.064', '0', '0.120', '0', '0', '0', 'base_link', 'laser'],

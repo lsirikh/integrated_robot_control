@@ -3,10 +3,8 @@
 echo "Creating udev rules for IMU and RPLIDAR"
 
 # Source colcon_cd function if needed
-if [ -f /usr/share/colcon_cd/function/colcon_cd.sh ]; then
-   source /usr/share/colcon_cd/function/colcon_cd.sh
-     colcon_cd integrated_robot_control
-fi
+echo "remap the device serial port(ttyUSB0) -> rplidar, port(ttyUSB1) -> imu_usb"
+echo "check it using the command : ls -l /dev | grep ttyUSB"
 
 # Copy the rules file to /etc/udev/rules.d/
 echo "Started copy the rule..."
