@@ -1,0 +1,85 @@
+[0.000000] (-) TimerEvent: {}
+[0.000957] (integrated_robot_control) JobQueued: {'identifier': 'integrated_robot_control', 'dependencies': OrderedDict()}
+[0.001787] (integrated_robot_control) JobStarted: {'identifier': 'integrated_robot_control'}
+[0.099352] (-) TimerEvent: {}
+[0.200224] (-) TimerEvent: {}
+[0.300917] (-) TimerEvent: {}
+[0.401523] (-) TimerEvent: {}
+[0.502120] (-) TimerEvent: {}
+[0.602702] (-) TimerEvent: {}
+[0.703293] (-) TimerEvent: {}
+[0.803999] (-) TimerEvent: {}
+[0.904631] (-) TimerEvent: {}
+[1.006060] (-) TimerEvent: {}
+[1.107754] (-) TimerEvent: {}
+[1.208511] (-) TimerEvent: {}
+[1.309140] (-) TimerEvent: {}
+[1.409717] (-) TimerEvent: {}
+[1.510301] (-) TimerEvent: {}
+[1.610890] (-) TimerEvent: {}
+[1.711452] (-) TimerEvent: {}
+[1.812174] (-) TimerEvent: {}
+[1.912812] (-) TimerEvent: {}
+[2.013377] (-) TimerEvent: {}
+[2.113955] (-) TimerEvent: {}
+[2.214598] (-) TimerEvent: {}
+[2.315209] (-) TimerEvent: {}
+[2.415869] (-) TimerEvent: {}
+[2.516609] (-) TimerEvent: {}
+[2.597600] (integrated_robot_control) Command: {'cmd': ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', 'setup.py', 'develop', '--editable', '--build-directory', '/home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/build', '--no-deps', 'symlink_data'], 'cwd': '/home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control', 'env': {'RCUTILS_LOGGING_BUFFERED_STREAM': '1', 'LESSOPEN': '| /usr/bin/lesspipe %s', 'USER': 'ubuntu', 'SSH_CLIENT': '192.168.0.175 34866 22', 'LC_TIME': 'ko_KR.UTF-8', 'ROS_NAMESPACE': 'robot1', 'XDG_SESSION_TYPE': 'tty', 'SHLVL': '1', 'RCUTILS_CONSOLE_OUTPUT_FORMAT': '[{severity}]: {message}', 'LD_LIBRARY_PATH': '/home/ubuntu/robot_ws/install/rpi_robot_action_interfaces/lib:/opt/ros/foxy/opt/yaml_cpp_vendor/lib:/opt/ros/foxy/opt/rviz_ogre_vendor/lib:/opt/ros/foxy/lib/aarch64-linux-gnu:/opt/ros/foxy/lib', 'MOTD_SHOWN': 'pam', 'HOME': '/home/ubuntu', 'OLDPWD': '/home/ubuntu/robot_ws/src', 'SSH_TTY': '/dev/pts/5', 'ROS_PYTHON_VERSION': '3', 'LC_MONETARY': 'ko_KR.UTF-8', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus', '_colcon_cd_root': '/home/ubuntu/robot_ws', 'COLCON_PREFIX_PATH': '/home/ubuntu/robot_ws/install', 'ROS_DISTRO': 'foxy', 'LOGNAME': 'ubuntu', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'XDG_SESSION_CLASS': 'user', 'TERM': 'xterm-256color', 'XDG_SESSION_ID': '4', 'ROS_LOCALHOST_ONLY': '0', 'PATH': '/home/ubuntu/.local/bin:/opt/ros/foxy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin', 'LC_ADDRESS': 'ko_KR.UTF-8', 'XDG_RUNTIME_DIR': '/run/user/1000', 'LANG': 'en_US.UTF-8', 'LC_TELEPHONE': 'ko_KR.UTF-8', 'RMW_IMPLEMENTATION': 'rmw_fastrtps_cpp', 'LS_COLORS': 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:', 'ROS_DOMAIN_ID': '7', 'AMENT_PREFIX_PATH': '/home/ubuntu/robot_ws/install/wit_ros2_imu:/home/ubuntu/robot_ws/install/rplidar_ros:/home/ubuntu/robot_ws/install/rpi_robot_slam:/home/ubuntu/robot_ws/install/rpi_robot_control:/home/ubuntu/robot_ws/install/rpi_robot_bringup:/home/ubuntu/robot_ws/install/rpi_robot_action_interfaces:/home/ubuntu/robot_ws/install/integrated_robot_control:/opt/ros/foxy', 'SHELL': '/bin/bash', 'LC_NAME': 'ko_KR.UTF-8', 'LESSCLOSE': '/usr/bin/lesspipe %s %s', 'LC_MEASUREMENT': 'ko_KR.UTF-8', 'LC_IDENTIFICATION': 'ko_KR.UTF-8', 'RCUTILS_LOGGING_USE_STDOUT': '0', 'PWD': '/home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control', 'LC_ALL': 'en_US.UTF-8', 'PICO_SDK_PATH': '/home/ubuntu/pico/pico-sdk', 'SSH_CONNECTION': '192.168.0.175 34866 192.168.0.170 22', 'RCUTILS_COLORIZED_OUTPUT': '1', 'XDG_DATA_DIRS': '/usr/local/share:/usr/share:/var/lib/snapd/desktop', 'PYTHONPATH': '/home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/prefix_override:/home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/lib/python3.8/site-packages:/home/ubuntu/robot_ws/build/wit_ros2_imu:/home/ubuntu/robot_ws/install/wit_ros2_imu/lib/python3.8/site-packages:/home/ubuntu/robot_ws/build/rpi_robot_control:/home/ubuntu/robot_ws/install/rpi_robot_control/lib/python3.8/site-packages:/home/ubuntu/robot_ws/install/rpi_robot_bringup/lib/python3.8/site-packages:/home/ubuntu/robot_ws/install/rpi_robot_action_interfaces/lib/python3.8/site-packages:/home/ubuntu/robot_ws/build/integrated_robot_control:/home/ubuntu/robot_ws/install/integrated_robot_control/lib/python3.8/site-packages:/opt/ros/foxy/lib/python3.8/site-packages', 'LC_NUMERIC': 'ko_KR.UTF-8', 'LC_PAPER': 'ko_KR.UTF-8', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/home/ubuntu/robot_ws/install/rplidar_ros:/home/ubuntu/robot_ws/install/rpi_robot_slam:/home/ubuntu/robot_ws/install/rpi_robot_bringup:/home/ubuntu/robot_ws/install/rpi_robot_action_interfaces'}, 'shell': False}
+[2.617013] (-) TimerEvent: {}
+[2.718079] (-) TimerEvent: {}
+[2.818655] (-) TimerEvent: {}
+[2.919287] (-) TimerEvent: {}
+[3.019911] (-) TimerEvent: {}
+[3.120527] (-) TimerEvent: {}
+[3.221117] (-) TimerEvent: {}
+[3.321717] (-) TimerEvent: {}
+[3.422330] (-) TimerEvent: {}
+[3.522920] (-) TimerEvent: {}
+[3.623576] (-) TimerEvent: {}
+[3.633445] (integrated_robot_control) StdoutLine: {'line': b'running develop\n'}
+[3.723733] (-) TimerEvent: {}
+[3.824388] (-) TimerEvent: {}
+[3.924979] (-) TimerEvent: {}
+[4.025563] (-) TimerEvent: {}
+[4.126134] (-) TimerEvent: {}
+[4.188675] (integrated_robot_control) StdoutLine: {'line': b'running egg_info\n'}
+[4.189254] (integrated_robot_control) StdoutLine: {'line': b'creating integrated_robot_control.egg-info\n'}
+[4.189818] (integrated_robot_control) StdoutLine: {'line': b'writing integrated_robot_control.egg-info/PKG-INFO\n'}
+[4.190790] (integrated_robot_control) StdoutLine: {'line': b'writing dependency_links to integrated_robot_control.egg-info/dependency_links.txt\n'}
+[4.191404] (integrated_robot_control) StdoutLine: {'line': b'writing entry points to integrated_robot_control.egg-info/entry_points.txt\n'}
+[4.191954] (integrated_robot_control) StdoutLine: {'line': b'writing requirements to integrated_robot_control.egg-info/requires.txt\n'}
+[4.192515] (integrated_robot_control) StdoutLine: {'line': b'writing top-level names to integrated_robot_control.egg-info/top_level.txt\n'}
+[4.197314] (integrated_robot_control) StdoutLine: {'line': b"writing manifest file 'integrated_robot_control.egg-info/SOURCES.txt'\n"}
+[4.226289] (-) TimerEvent: {}
+[4.313469] (integrated_robot_control) StdoutLine: {'line': b"reading manifest file 'integrated_robot_control.egg-info/SOURCES.txt'\n"}
+[4.316120] (integrated_robot_control) StdoutLine: {'line': b"writing manifest file 'integrated_robot_control.egg-info/SOURCES.txt'\n"}
+[4.326430] (-) TimerEvent: {}
+[4.427044] (-) TimerEvent: {}
+[4.462064] (integrated_robot_control) StdoutLine: {'line': b'running build_ext\n'}
+[4.463200] (integrated_robot_control) StdoutLine: {'line': b'Creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/lib/python3.8/site-packages/site.py\n'}
+[4.470796] (integrated_robot_control) StdoutLine: {'line': b'Creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/lib/python3.8/site-packages/integrated-robot-control.egg-link (link to .)\n'}
+[4.473700] (integrated_robot_control) StdoutLine: {'line': b'Installing control_node script to /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/lib/integrated_robot_control\n'}
+[4.474529] (integrated_robot_control) StdoutLine: {'line': b'Installing ekf_node script to /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/lib/integrated_robot_control\n'}
+[4.475223] (integrated_robot_control) StdoutLine: {'line': b'Installing robot_control_node script to /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/lib/integrated_robot_control\n'}
+[4.476353] (integrated_robot_control) StdoutLine: {'line': b'\n'}
+[4.476929] (integrated_robot_control) StdoutLine: {'line': b'Installed /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control\n'}
+[4.477501] (integrated_robot_control) StdoutLine: {'line': b'running symlink_data\n'}
+[4.477853] (integrated_robot_control) StdoutLine: {'line': b'creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/ament_index\n'}
+[4.478260] (integrated_robot_control) StdoutLine: {'line': b'creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/ament_index/resource_index\n'}
+[4.478660] (integrated_robot_control) StdoutLine: {'line': b'creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/ament_index/resource_index/packages\n'}
+[4.479074] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/resource/integrated_robot_control -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/ament_index/resource_index/packages\n'}
+[4.479514] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/package.xml -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control\n'}
+[4.479925] (integrated_robot_control) StdoutLine: {'line': b'creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/launch\n'}
+[4.480371] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/launch/imu.launch.py -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/launch\n'}
+[4.480795] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/launch/integrated_robot_control.launch.py -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/launch\n'}
+[4.481197] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/launch/lidar.launch.py -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/launch\n'}
+[4.481606] (integrated_robot_control) StdoutLine: {'line': b'creating /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/config\n'}
+[4.482108] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/config/ekf.yaml -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/config\n'}
+[4.482930] (integrated_robot_control) StdoutLine: {'line': b'symbolically linking /home/ubuntu/robot_ws/src/integrated_robot_control/build/integrated_robot_control/config/ps4.config.yaml -> /home/ubuntu/robot_ws/src/integrated_robot_control/install/integrated_robot_control/share/integrated_robot_control/config\n'}
+[4.527346] (-) TimerEvent: {}
+[4.597968] (integrated_robot_control) CommandEnded: {'returncode': 0}
+[4.627677] (-) TimerEvent: {}
+[4.649554] (integrated_robot_control) JobEnded: {'identifier': 'integrated_robot_control', 'rc': 0}
+[4.651936] (-) EventReactorShutdown: {}

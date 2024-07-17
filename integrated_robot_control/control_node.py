@@ -145,7 +145,8 @@ class RobotControlNode(Node):
     
     def twist_callback(self, twist: Twist):
         self.twist = twist
-        self.get_logger().info(f'Twist received: {twist}')
+        self.get_logger().info(f'[Twist received] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
+        #f'{theta:.4f}'
 
 
         

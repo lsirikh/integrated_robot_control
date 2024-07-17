@@ -53,32 +53,41 @@ class EKFNode(Node):
         self.x = np.zeros(5)
         self.P = np.eye(5)
 
-        # CSV 파일 경로 설정 및 로그 출력
-        timestamp_str = datetime.now().strftime('%Y-%m-%d_%Hh%Mm')
-        self.csv_file_path = os.path.expanduser(f'~/csv_logs/ekf_node_data_{timestamp_str}.csv')
-        self.get_logger().info(f'CSV file path: {self.csv_file_path}')
+        # # CSV 파일 경로 설정 및 로그 출력
+        # timestamp_str = datetime.now().strftime('%Y-%m-%d_%Hh%Mm')
+        # self.csv_file_path = os.path.expanduser(f'~/csv_logs/ekf_node_data_{timestamp_str}.csv')
+        # self.get_logger().info(f'CSV file path: {self.csv_file_path}')
         
-        # CSV 파일 경로의 디렉터리 생성
-        os.makedirs(os.path.dirname(self.csv_file_path), exist_ok=True)
+        # # CSV 파일 경로의 디렉터리 생성
+        # os.makedirs(os.path.dirname(self.csv_file_path), exist_ok=True)
 
-        # CSV 파일이 존재하지 않으면 새로 생성
-        if not os.path.exists(self.csv_file_path):
-            self.get_logger().info('Creating new CSV file')
-            with open(self.csv_file_path, mode='w') as file:
-                writer = csv.writer(file)
-                writer.writerow(['timestamp', 'x', 'y', 'theta', 'v', 'w', 'x_corrected', 'y_corrected', 'theta_corrected', 'v_corrected', 'w_corrected'])
+        # # CSV 파일이 존재하지 않으면 새로 생성
+        # if not os.path.exists(self.csv_file_path):
+        #     self.get_logger().info('Creating new CSV file')
+        #     with open(self.csv_file_path, mode='w') as file:
+        #         writer = csv.writer(file)
+        #         writer.writerow(['timestamp', 'x', 'y', 'theta', 'v', 'w', 'x_corrected', 'y_corrected', 'theta_corrected', 'v_corrected', 'w_corrected', 'lidar_ranges'])
 
         self.get_logger().info("Finish EKF Node initialized")
 
     # 콜백 함수: 오도메트리 메시지 처리
     def odom_callback(self, msg):
-        self.get_logger().info("Odometry message received")
+        # self.get_logger().info("Odometry message received")
 
         dt = 0.04  # 시간 간격
         x, y = float(msg.pose.pose.position.x), float(msg.pose.pose.position.y)
         _, _, theta = quaternion_to_euler(msg.pose.pose.orientation)
         v = float(msg.twist.twist.linear.x)
         w = float(msg.twist.twist.angular.z)
+
+        # 초기 상태 벡터 설정
+        if np.all(self.x == 0):  # 초기 상태 벡터가 전부 0인 경우
+            self.x[0] = x
+            self.x[1] = y
+            self.x[2] = theta
+            self.x[3] = v
+            self.x[4] = w
+            return  # 초기화 후 첫 콜백에서는 보정 수행 안 함
 
         # 상태 전이 행렬
         F = np.array([
@@ -104,19 +113,9 @@ class EKFNode(Node):
         # 수정된 오도메트리 퍼블리시
         self.publish_corrected_odometry()
 
-        # CSV 파일에 데이터 기록
-        with open(self.csv_file_path, mode='a') as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],  # 소수점 3자리까지 표기
-                f'{x:.4f}', f'{y:.4f}', f'{theta:.4f}', f'{v:.4f}', f'{w:.4f}',  # 원본 데이터
-                f'{float(self.x[0]):.4f}', f'{float(self.x[1]):.4f}', f'{float(self.x[2]):.4f}',  # 보정된 데이터
-                f'{float(self.x[3]):.4f}', f'{float(self.x[4]):.4f}'
-            ])
-
     # 콜백 함수: IMU 메시지 처리
     def imu_callback(self, msg):
-        self.get_logger().info("IMU message received")
+        # self.get_logger().info("IMU message received")
         _, _, theta = quaternion_to_euler(msg.orientation)
         ax = float(msg.linear_acceleration.x)
         ay = float(msg.linear_acceleration.y)
@@ -124,6 +123,7 @@ class EKFNode(Node):
         self.x[3] += ax * 0.04
         self.x[4] += ay * 0.04
 
+    
     # 함수: 수정된 오도메트리 퍼블리시
     def publish_corrected_odometry(self):
         odom_msg = Odometry()
@@ -133,12 +133,17 @@ class EKFNode(Node):
         odom_msg.pose.pose.position.x = float(self.x[0])
         odom_msg.pose.pose.position.y = float(self.x[1])
         odom_msg.pose.pose.position.z = 0.0
+
+        roll, pitch, yaw = 0.0, 0.0, float(self.x[2])
+        qx, qy, qz, qw = quaternion_from_euler(roll, pitch, yaw)
+        
         odom_msg.pose.pose.orientation = Quaternion(
-            x=float(self.x[0]),  # float으로 변환
-            y=float(self.x[1]),  # float으로 변환
-            z=float(self.x[2]),  # float으로 변환
-            w=1.0
+            x=qx,
+            y=qy,
+            z=qz,
+            w=qw
         )
+
         odom_msg.twist.twist.linear.x = float(self.x[3])  # float으로 변환
         odom_msg.twist.twist.angular.z = float(self.x[4])  # float으로 변환
         self.ekf_odom_pub.publish(odom_msg)
