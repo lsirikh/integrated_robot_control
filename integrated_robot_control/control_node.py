@@ -16,6 +16,8 @@ import transforms3d.euler
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry
+import transforms3d.euler
+
 
 def quaternion_from_euler(roll, pitch, yaw) -> Quaternion:
     q = transforms3d.euler.euler2quat(roll, pitch, yaw)
@@ -26,15 +28,20 @@ def quaternion_from_euler(roll, pitch, yaw) -> Quaternion:
     quaternion.w = q[0]
     return quaternion
 
+def euler_from_quaternion(quaternion):
+    # quaternion -> euler
+    euler = transforms3d.euler.quat2euler([quaternion.w, quaternion.x, quaternion.y, quaternion.z])
+    return euler
+
 @dataclass
 class SerialStatus:
     """Class for different data given by the embedded system"""
     left_ref_speed: float
     right_ref_speed: float
-    left_speed:float
+    left_speed: float
     right_speed: float
     left_effort: float
-    right_effor: float
+    right_effort: float
     x_pos: float
     y_pos: float
     theta: float
@@ -64,7 +71,7 @@ class RobotControlNode(Node):
         )
         time.sleep(0.2)
         self.port = self.get_parameter('pico_port').get_parameter_value().string_value
-        self.ser = serial.Serial(self.port)
+        self.ser = serial.Serial(self.port, baudrate=115200, timeout=1)
         self.get_logger().info(f'Using serial port {self.ser.name}')
         self.twist = Twist()
         # set timer
@@ -80,11 +87,12 @@ class RobotControlNode(Node):
 
         robot_orientation = quaternion_from_euler(0, 0, robot_state.theta)
         timestamp = self.get_clock().now().to_msg()
+        
         # transforms
         t = TransformStamped()
-        t.header.stamp = timestamp
         t.header.frame_id = 'odom'
         t.child_frame_id = 'base_link'
+        t.header.stamp = timestamp
         t.transform.translation.x = robot_state.x_pos
         t.transform.translation.y = robot_state.y_pos
         t.transform.translation.z = 0.0325
@@ -102,10 +110,54 @@ class RobotControlNode(Node):
         odom_msg.twist.twist.linear.x = robot_state.v
         odom_msg.twist.twist.angular.z = robot_state.w
 
+        # Log the odometry message
+        # self.log_odometry(odom_msg)
+        # self.log_robot_state(robot_state)
+
         # broadcast and publish
         self.tf_broadcaster.sendTransform(t)
         self.odom_publisher.publish(odom_msg)
 
+
+    def log_odometry(self, odom_msg):
+        self.get_logger().info(f'Odom Message:')
+        self.get_logger().info(f'  Header:')
+        self.get_logger().info(f'    Stamp: {odom_msg.header.stamp.sec}.{odom_msg.header.stamp.nanosec}')
+        self.get_logger().info(f'    Frame ID: {odom_msg.header.frame_id}')
+        self.get_logger().info(f'  Child Frame ID: {odom_msg.child_frame_id}')
+        self.get_logger().info(f'  Pose:')
+        self.get_logger().info(f'    Position:')
+        self.get_logger().info(f'      x: {odom_msg.pose.pose.position.x}')
+        self.get_logger().info(f'      y: {odom_msg.pose.pose.position.y}')
+        self.get_logger().info(f'      z: {odom_msg.pose.pose.position.z}')
+        self.get_logger().info(f'    Orientation:')
+        self.get_logger().info(f'      x: {odom_msg.pose.pose.orientation.x}')
+        self.get_logger().info(f'      y: {odom_msg.pose.pose.orientation.y}')
+        self.get_logger().info(f'      z: {odom_msg.pose.pose.orientation.z}')
+        self.get_logger().info(f'      w: {odom_msg.pose.pose.orientation.w}')
+        self.get_logger().info(f'  Twist:')
+        self.get_logger().info(f'    Linear:')
+        self.get_logger().info(f'      x: {odom_msg.twist.twist.linear.x}')
+        self.get_logger().info(f'      y: {odom_msg.twist.twist.linear.y}')
+        self.get_logger().info(f'      z: {odom_msg.twist.twist.linear.z}')
+        self.get_logger().info(f'    Angular:')
+        self.get_logger().info(f'      x: {odom_msg.twist.twist.angular.x}')
+        self.get_logger().info(f'      y: {odom_msg.twist.twist.angular.y}')
+        self.get_logger().info(f'      z: {odom_msg.twist.twist.angular.z}')
+
+    def log_robot_state(self, robot_state):
+        self.get_logger().info(f'Robot State:')
+        self.get_logger().info(f'  Left Ref Speed: {robot_state.left_ref_speed}')
+        self.get_logger().info(f'  Right Ref Speed: {robot_state.right_ref_speed}')
+        self.get_logger().info(f'  Left Speed: {robot_state.left_speed}')
+        self.get_logger().info(f'  Right Speed: {robot_state.right_speed}')
+        self.get_logger().info(f'  Left Effort: {robot_state.left_effort}')
+        self.get_logger().info(f'  Right Effort: {robot_state.right_effort}')
+        self.get_logger().info(f'  X Position: {robot_state.x_pos}')
+        self.get_logger().info(f'  Y Position: {robot_state.y_pos}')
+        self.get_logger().info(f'  Theta: {robot_state.theta}')
+        self.get_logger().info(f'  Linear Velocity: {robot_state.v}')
+        self.get_logger().info(f'  Angular Velocity: {robot_state.w}')
 
     def send_command(self, linear: float, angular: float) -> SerialStatus:
         self.get_logger().debug(f'Data to send: {linear}, {angular}')
@@ -115,7 +167,7 @@ class RobotControlNode(Node):
         # while self.ser.in_waiting == 0:
         #     pass
 
-         # Wait for data with a timeout
+        # Wait for data with a timeout
         timeout = 1.0  # 1 second timeout
         start_time = time.time()
         while self.ser.in_waiting == 0:
@@ -125,11 +177,13 @@ class RobotControlNode(Node):
             time.sleep(0.01)  # Sleep briefly to prevent busy waiting
 
         res = self.ser.read(self.ser.in_waiting).decode('UTF-8')
-        self.get_logger().debug(f'data: "{res}", bytes: {len(res)}')
 
-        if res == '0' or len(res) < 79 or len(res) > (79 + 13):
+        if (len(res) < 79) or (len(res) > (79 + 13)):
             #self.get_logger().warn(f'Bad data: "{res}"')
             return None
+        else:
+            self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
+
 
         try:
             raw_list = res.strip().split('/')[1].split(',')
@@ -138,26 +192,26 @@ class RobotControlNode(Node):
                 self.get_logger().error(f'Unexpected number of elements in data: {values_list}')
                 return None
         except ValueError as e:
-            self.get_logger().warn(f'Bad data: "{res}"')
+            # self.get_logger().warn(f'Bad data: "{res}"')
             return None
 
         return SerialStatus(*values_list)
     
     def twist_callback(self, twist: Twist):
         self.twist = twist
-        self.get_logger().info(f'[Twist received] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
-        #f'{theta:.4f}'
-
-
-        
+        # self.get_logger().info(f'[Twist received] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
 
 def main(args=None):
     rclpy.init(args=args)
-    robot_control_node = RobotControlNode()
-    rclpy.spin(robot_control_node)
-
-    robot_control_node.destroy_node()
-    rclpy.shutdown()
+    
+    try:
+        robot_control_node = RobotControlNode()
+        rclpy.spin(robot_control_node)
+    except KeyboardInterrupt:
+        robot_control_node.get_logger().info('Keyboard Interrupt (Ctrl+C) detected. Exiting...')
+    finally:
+        robot_control_node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

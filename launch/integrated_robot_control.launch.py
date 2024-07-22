@@ -17,6 +17,8 @@ def generate_launch_description():
     config_filepath = LaunchConfiguration('config_filepath', default=[
         LaunchConfiguration('config_dir'), '/', joy_config, '.config.yaml'
     ])
+
+    # EKF 설정 파일 경로
     ekf_config = os.path.join(get_package_share_directory('integrated_robot_control'), 'config', 'ekf.yaml')
     config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
 
