@@ -1,26 +1,56 @@
 ekf_se_odom:
   ros__parameters:
-    frequency: 30.0
+    # EKF 노드의 주파수 설정 (Hz 단위)
+    frequency: 65.0
+    # 센서 데이터의 타임아웃 설정 (초 단위)
     sensor_timeout: 0.1
+    # 2D 모드 설정 (true인 경우, z축과 관련된 데이터는 무시됨)
     two_d_mode: true
+    # TF 변환을 퍼블리시할지 여부
     publish_tf: true
-    map_frame: map              # Defaults to "map" if unspecified
-    odom_frame: odom            # Defaults to "odom" if unspecified
-    base_link_frame: base_link  # Defaults to "base_link" if unspecified
-    world_frame: odom           # Defaults to the value of odom_frame if unspecified
+    # 맵 프레임의 이름 설정
+    map_frame: "map"
+    # 오도메트리 프레임의 이름 설정
+    odom_frame: "odom"
+    # 기본 링크 프레임의 이름 설정 (로봇 본체)
+    base_link_frame: "base_link"
+    # 월드 프레임의 이름 설정
+    world_frame: "odom"
+    # 오도메트리 데이터의 토픽 이름
+    odom0: "/odom"
 
-    odom0: /odom
-    odom0_config: [false, false, false,
-                   false, false, false,
-                   true,  true,  true,
-                   false, false, true,
-                   false, false, false]
+    # 오도메트리 데이터의 사용 여부 설정
+    # 각 항목은 다음을 나타냅니다:
+    # |x,     y,      z,     |
+    # |roll,  pitch,  yaw,   |
+    # |vx,    vy,     vz,    |
+    # |vroll, vpitch, vyaw,  |
+    # |ax,    ay,     az     |
+    odom0_config: [false, false, false,   # x, y, z 위치 사용 안 함
+                  false, false, false,   # roll, pitch, yaw 각도 사용 안 함
+                  true, false, false,    # vx (선형 속도 x)만 사용
+                  false, false, true,    # vyaw (각속도 z)만 사용
+                  false, false, false]   # 가속도 사용 안 함
 
-    imu0: /imu/data_raw
-    imu0_config: [false, false, false,
-                  false, false, false,
-                  false, false, false,
-                  true,  true,  true,
-                  false, false, false]
+    # IMU 데이터의 토픽 이름
+    imu0: "/imu/data_raw"
+
+    # IMU 데이터의 사용 여부 설정
+    # 각 항목은 다음을 나타냅니다:
+    # |x,     y,      z,     |
+    # |roll,  pitch,  yaw,   |
+    # |vx,    vy,     vz,    |
+    # |vroll, vpitch, vyaw,  |
+    # |ax,    ay,     az     |
+    imu0_config: [false, false, false,   # x, y, z 위치 사용 안 함
+                  true, true, true,     # roll, pitch, yaw 각도 사용
+                  false, false, false,  # 선형 속도 사용 안 함
+                  true, true, true,     # 각속도 (vroll, vpitch, vyaw) 사용
+                  true, true, true]     # 가속도 (ax, ay, az) 사용
+
+    # IMU 데이터의 차분 여부 설정
     imu0_differential: false
+
+    # IMU 데이터에서 중력 가속도 제거 여부 설정
     imu0_remove_gravitational_acceleration: true
+

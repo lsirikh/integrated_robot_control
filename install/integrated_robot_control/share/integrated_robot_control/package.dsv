@@ -1,9 +1,0 @@
-source;share/integrated_robot_control/hook/pythonpath.ps1
-source;share/integrated_robot_control/hook/pythonpath.dsv
-source;share/integrated_robot_control/hook/pythonpath.sh
-source;share/integrated_robot_control/hook/ament_prefix_path.ps1
-source;share/integrated_robot_control/hook/ament_prefix_path.dsv
-source;share/integrated_robot_control/hook/ament_prefix_path.sh
-source;../../build/integrated_robot_control/share/integrated_robot_control/hook/pythonpath_develop.ps1
-source;../../build/integrated_robot_control/share/integrated_robot_control/hook/pythonpath_develop.dsv
-source;../../build/integrated_robot_control/share/integrated_robot_control/hook/pythonpath_develop.sh
