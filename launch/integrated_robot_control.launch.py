@@ -79,12 +79,12 @@ def generate_launch_description():
             name='teleop_twist_joy_node', parameters=[config_filepath],
             output='screen'
         ),
-        Node(
-            package='integrated_robot_control', executable='ekf_node',
-            name='ekf_node', 
-            output='screen',
-            parameters=[ekf_config]
-        ),
+        # Node(
+        #     package='integrated_robot_control', executable='ekf_node',
+        #     name='ekf_node', 
+        #     output='screen',
+        #     parameters=[ekf_config]
+        # ),
         Node(
             package='integrated_robot_control', executable='control_node',
             name='control_node', 
@@ -95,6 +95,18 @@ def generate_launch_description():
             package='integrated_robot_control', executable='data_report_node',
             name='data_report_node', 
             output='screen',
+        ),
+        Node(
+            package='ekf_robot_control',
+            executable='main_node',
+            name='ekf_main_node',
+            output='screen'
+        ),
+        Node(
+            package='ekf_robot_control',
+            executable='set_measurement_covariance_node',
+            name='ekf_set_measurement_covariance_node',
+            output='screen'
         ),
         Node(
             package='tf2_ros',

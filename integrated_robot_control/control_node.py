@@ -56,19 +56,9 @@ class RobotControlNode(Node):
         self.get_logger().debug(f'Raspberry pi pico was declared!')
         self.declare_parameter('pico_port', '/dev/ttyACM0')
 
-        self.twist_subscription = self.create_subscription(
-            Twist,
-            'cmd_vel',
-            self.twist_callback,
-            10
-        )
-        self.twist_subscription
+        self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, 10)
+        self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
 
-        self.odom_publisher = self.create_publisher(
-            Odometry,
-            'odom',
-            10
-        )
         time.sleep(0.2)
         self.port = self.get_parameter('pico_port').get_parameter_value().string_value
         self.ser = serial.Serial(self.port, baudrate=115200, timeout=1)
@@ -90,9 +80,9 @@ class RobotControlNode(Node):
         
         # transforms
         t = TransformStamped()
+        t.header.stamp = timestamp
         t.header.frame_id = 'odom'
         t.child_frame_id = 'base_link'
-        t.header.stamp = timestamp
         t.transform.translation.x = robot_state.x_pos
         t.transform.translation.y = robot_state.y_pos
         t.transform.translation.z = 0.0325
@@ -100,9 +90,9 @@ class RobotControlNode(Node):
         
         # odometry twist
         odom_msg = Odometry()
+        odom_msg.header.stamp = timestamp
         odom_msg.header.frame_id = 'odom'
         odom_msg.child_frame_id = 'base_link'
-        odom_msg.header.stamp = timestamp
         odom_msg.pose.pose.position.x = robot_state.x_pos
         odom_msg.pose.pose.position.y = robot_state.y_pos
         odom_msg.pose.pose.position.z = 0.325
@@ -181,8 +171,8 @@ class RobotControlNode(Node):
         if (len(res) < 79) or (len(res) > (79 + 13)):
             #self.get_logger().warn(f'Bad data: "{res}"')
             return None
-        else:
-            self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
+        # else:
+        #     self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
 
 
         try:
@@ -194,6 +184,9 @@ class RobotControlNode(Node):
         except ValueError as e:
             # self.get_logger().warn(f'Bad data: "{res}"')
             return None
+        except IndexError as e:
+            return None
+
 
         return SerialStatus(*values_list)
     

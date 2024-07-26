@@ -13,12 +13,14 @@ class DataReportNode(Node):
         super().__init__('data_report_node')
 
         self.get_logger().info('Start Data Report Node initialized')
-        # 구독자 생성: 오도메트리 메시지
-        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
-        self.ekf_sub = self.create_subscription(Odometry, 'odom/filtered', self.ekf_callback, 10)
-        self.lidar_sub = self.create_subscription(LaserScan, 'scan', self.lidar_callback, 10)
+         # 구독자 생성: 오도메트리 메시지
+        self.odom_sub = self.create_subscription(Odometry, '/odom/data', self.odom_callback, 10)
+        self.imu_sub = self.create_subscription(Imu, '/imu/data', self.imu_callback, 10)
+        self.ekf_sub = self.create_subscription(Odometry, '/odometry/fused', self.ekf_callback, 10)
+        self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
 
         self.odom_data = None
+        self.imu_data = None
         self.ekf_data = None
         self.lidar_data = None
 
@@ -37,22 +39,25 @@ class DataReportNode(Node):
                 # writer.writerow(['timestamp', 'x', 'y', 'theta', 'v', 'w', 'x_corrected', 'y_corrected', 'theta_corrected', 'v_corrected', 'w_corrected', 'lidar_ranges'])
                 writer.writerow([
                                     'timestamp', 
-                                    # 'x', 'y', 'theta', 'v', 'w',
-                                    'position_x', 'position_y', 'position_z',
-                                    'orientation_x', 'orientation_y', 'orientation_z', 'orientation_w',
-                                    'linear_x', 'linear_y', 'linear_z',
-                                    'angular_x', 'angular_y', 'angular_z',
+                                    'odom_position_x', 'odom_position_y', 'odom_position_z',
+                                    'odom_orientation_x', 'odom_orientation_y', 'odom_orientation_z', 'odom_orientation_w',
+                                    'odom_linear_x', 'odom_linear_y', 'odom_linear_z',
+                                    'odom_angular_x', 'odom_angular_y', 'odom_angular_z',
 
-                                    'correct_position_x', 'correct_position_y', 'correct_position_z',
-                                    'correct_orientation_x', 'correct_orientation_y', 'correct_orientation_z', 'correct_orientation_w',
-                                    'correct_linear_x', 'correct_linear_y', 'correct_linear_z',
-                                    'correct_angular_x', 'correct_angular_y', 'correct_angular_z',
+                                    'imu_orientation_x', 'imu_orientation_y', 'imu_orientation_z', 'imu_orientation_w',
+                                    'imu_angular_velocity_x', 'imu_angular_velocity_y', 'imu_angular_velocity_z',
+                                    'imu_linear_acceleration_x', 'imu_linear_acceleration_y', 'imu_linear_acceleration_z',
+
+                                    'ekf_position_x', 'ekf_position_y', 'ekf_position_z',
+                                    'ekf_orientation_x', 'ekf_orientation_y', 'ekf_orientation_z', 'ekf_orientation_w',
+                                    'ekf_linear_x', 'ekf_linear_y', 'ekf_linear_z',
+                                    'ekf_angular_x', 'ekf_angular_y', 'ekf_angular_z',
+
+                                    'lidar_data'
                                 ])
         self.timer = self.create_timer(0.125, self.timer_callback)
 
     def odom_callback(self, msg):
-        #self.get_logger().info(f'odom_callback in data_report_node')
-
         self.odom_data = [
             msg.pose.pose.position.x,
             msg.pose.pose.position.y,
@@ -67,6 +72,20 @@ class DataReportNode(Node):
             msg.twist.twist.angular.x,
             msg.twist.twist.angular.y,
             msg.twist.twist.angular.z
+        ]
+
+    def imu_callback(self, msg):
+        self.imu_data = [
+            msg.orientation.x,
+            msg.orientation.y,
+            msg.orientation.z,
+            msg.orientation.w,
+            msg.angular_velocity.x,
+            msg.angular_velocity.y,
+            msg.angular_velocity.z,
+            msg.linear_acceleration.x,
+            msg.linear_acceleration.y,
+            msg.linear_acceleration.z
         ]
 
     def ekf_callback(self, msg):
@@ -112,31 +131,48 @@ class DataReportNode(Node):
         
 
     def timer_callback(self):
-        if self.ekf_data is None or self.lidar_data is None:
-            self.get_logger().info('Lidar data or Imu data is not available yet')
+        if self.lidar_data is None:
+            self.get_logger().info('Lidar data is not available yet')
             return
         
+        if self.imu_data is None:
+            self.get_logger().info('Imu data is not available yet')
+            return
+
         if self.odom_data is None:
             self.get_logger().info('Odometry data is not available yet')
             return
 
+        if self.ekf_data is None:
+            self.get_logger().info('Extended Kalman Filter data is not available yet')
+            return
+
         lidar_data_str = ','.join([f'[{angle:.2f},{distance:.2f}]' for angle, distance in self.lidar_data])
 
+        # with open(self.csv_file_path, mode='a') as file:
+        #     writer = csv.writer(file)
+        #     writer.writerow([
+        #         datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+        #         # f'[{self.odom_data[0]:.4f}', f'{self.odom_data[1]:.4f}', f'{self.odom_data[2]:.4f}', f'{self.odom_data[3]:.4f}', f'{self.odom_data[4]:.4f}]',
+        #         f'{self.odom_data[0]:.4f}', f'{self.odom_data[1]:.4f}', f'{self.odom_data[2]:.4f}',
+        #         f'{self.odom_data[3]:.4f}', f'{self.odom_data[4]:.4f}', f'{self.odom_data[5]:.4f}', f'{self.odom_data[6]:.4f}',
+        #         f'{self.odom_data[7]:.4f}', f'{self.odom_data[8]:.4f}', f'{self.odom_data[9]:.4f}',
+        #         f'{self.odom_data[10]:.4f}', f'{self.odom_data[11]:.4f}', f'{self.odom_data[12]:.4f}',
+
+        #          f'{self.ekf_data[0]:.4f}', f'{self.ekf_data[1]:.4f}', f'{self.ekf_data[2]:.4f}',
+        #         f'{self.ekf_data[3]:.4f}', f'{self.ekf_data[4]:.4f}', f'{self.ekf_data[5]:.4f}', f'{self.ekf_data[6]:.4f}',
+        #         f'{self.ekf_data[7]:.4f}', f'{self.ekf_data[8]:.4f}', f'{self.ekf_data[9]:.4f}',
+        #         f'{self.ekf_data[10]:.4f}', f'{self.ekf_data[11]:.4f}', f'{self.ekf_data[12]:.4f}'
+        #         # , f'[{lidar_data_str}]'
+        #     ])
         with open(self.csv_file_path, mode='a') as file:
             writer = csv.writer(file)
             writer.writerow([
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                # f'[{self.odom_data[0]:.4f}', f'{self.odom_data[1]:.4f}', f'{self.odom_data[2]:.4f}', f'{self.odom_data[3]:.4f}', f'{self.odom_data[4]:.4f}]',
-                f'{self.odom_data[0]:.4f}', f'{self.odom_data[1]:.4f}', f'{self.odom_data[2]:.4f}',
-                f'{self.odom_data[3]:.4f}', f'{self.odom_data[4]:.4f}', f'{self.odom_data[5]:.4f}', f'{self.odom_data[6]:.4f}',
-                f'{self.odom_data[7]:.4f}', f'{self.odom_data[8]:.4f}', f'{self.odom_data[9]:.4f}',
-                f'{self.odom_data[10]:.4f}', f'{self.odom_data[11]:.4f}', f'{self.odom_data[12]:.4f}',
-
-                 f'{self.ekf_data[0]:.4f}', f'{self.ekf_data[1]:.4f}', f'{self.ekf_data[2]:.4f}',
-                f'{self.ekf_data[3]:.4f}', f'{self.ekf_data[4]:.4f}', f'{self.ekf_data[5]:.4f}', f'{self.ekf_data[6]:.4f}',
-                f'{self.ekf_data[7]:.4f}', f'{self.ekf_data[8]:.4f}', f'{self.ekf_data[9]:.4f}',
-                f'{self.ekf_data[10]:.4f}', f'{self.ekf_data[11]:.4f}', f'{self.ekf_data[12]:.4f}'
-                # , f'[{lidar_data_str}]'
+                *[f'{val:.4f}' for val in self.odom_data],
+                *[f'{val:.4f}' for val in self.imu_data],
+                *[f'{val:.4f}' for val in self.ekf_data],
+                lidar_data_str
             ])
 
 def main(args=None):
