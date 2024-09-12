@@ -108,6 +108,13 @@ def generate_launch_description():
             name='ekf_set_measurement_covariance_node',
             output='screen'
         ),
+        # 새로 추가된 robot_control_profile 노드
+        Node(
+            package='integrated_robot_control', executable='robot_control_profile',
+            name='robot_control_profile_node',
+            output='screen'
+        )
+        ,
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
@@ -117,7 +124,14 @@ def generate_launch_description():
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
+            arguments=['0.0', '0.0', '0.05', '0', '0', '0', 'base_link', 'imu_link'],
+            output='screen'
+        ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
             arguments=['0', '0', '0.0325', '0', '0', '0', 'base_link', 'base_footprint'],
             output='screen'
         )
+        
     ])
