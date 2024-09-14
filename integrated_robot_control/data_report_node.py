@@ -47,7 +47,7 @@ class DataReportNode(Node):
                 writer = csv.writer(file)
                 # writer.writerow(['timestamp', 'x', 'y', 'theta', 'v', 'w', 'x_corrected', 'y_corrected', 'theta_corrected', 'v_corrected', 'w_corrected', 'lidar_ranges'])
                 writer.writerow([
-                                    'no', 'x', 'y',
+                #                    'no', 'x', 'y',
                                     'timestamp', 
                                     'odom_position_x', 'odom_position_y', 'odom_position_z',
                                     'odom_orientation_x', 'odom_orientation_y', 'odom_orientation_z', 'odom_orientation_w',
@@ -66,7 +66,7 @@ class DataReportNode(Node):
                                     'lidar_data'
                                 ])
         # timer callback based csv logs storing process
-        # self.timer = self.create_timer(0.125, self.timer_callback)
+        self.timer = self.create_timer(0.1, self.timer_callback)
 
         # planned-route 
         self.points = [
@@ -189,9 +189,9 @@ class DataReportNode(Node):
             return
 
 
-        self.get_logger().info(f'point_index : {self.point_index}')
-        no, x, y = self.points[self.point_index]
-        self.point_index = (self.point_index + 1) % len(self.points)  # 다음 데이터 포인트로 이동
+        # self.get_logger().info(f'point_index : {self.point_index}')
+        # no, x, y = self.points[self.point_index]
+        # self.point_index = (self.point_index + 1) % len(self.points)  # 다음 데이터 포인트로 이동
 
         lidar_data_str = ','.join([f'[{angle:.2f},{distance:.2f}]' for angle, distance in self.lidar_data])
 
@@ -214,7 +214,7 @@ class DataReportNode(Node):
         with open(self.csv_file_path, mode='a') as file:
             writer = csv.writer(file)
             writer.writerow([
-                no, x, y,
+                # no, x, y,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                 *[f'{val:.4f}' for val in self.odom_data],
                 *[f'{val:.4f}' for val in self.imu_data],
