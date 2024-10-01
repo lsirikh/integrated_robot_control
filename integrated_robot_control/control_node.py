@@ -16,6 +16,7 @@ import transforms3d.euler
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu  # 추가: IMU 데이터를 받기 위함
 import transforms3d.euler
 
 
@@ -58,20 +59,44 @@ class RobotControlNode(Node):
 
         self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, 10)
         self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
+        self.imu_subscription = self.create_subscription(Imu, '/imu/data_raw', self.imu_callback, 10)  # 추가: IMU 데이터 구독
+
 
         time.sleep(0.2)
         self.port = self.get_parameter('pico_port').get_parameter_value().string_value
         self.ser = serial.Serial(self.port, baudrate=115200, timeout=1)
         self.get_logger().info(f'Using serial port {self.ser.name}')
         self.twist = Twist()
+        self.linear_velocity = 0.0
+        self.angular_velocity = 0.0
+        self.prev_linear_velocity = 0.0
+        self.prev_angular_velocity = 0.0
+        self.linear_acceleration = 0.025
+        self.angular_acceleration = 0.05
+
+        # IMU 데이터를 위한 변수 초기화
+        self.current_roll = 0.0
+        self.current_pitch = 0.0
+
         # set timer
         self.pub_period = 0.04  # 0.02 seconds = 50 hz = pid rate for robot
         self.pub_timer = self.create_timer(self.pub_period, self.pub_callback)
         # tf
         self.tf_broadcaster = TransformBroadcaster(self)
     
+    def imu_callback(self, msg):
+        roll, pitch, yaw = euler_from_quaternion(msg.orientation)
+        self.current_roll = roll
+        self.current_pitch = pitch
+
     def pub_callback(self):
-        robot_state = self.send_command(self.twist.linear.x, self.twist.angular.z)
+        self.velocity_adjust_manager()
+
+        # 보정 각속도 계산
+        correction_angular_velocity = -0.1 * self.current_pitch
+
+        robot_state = self.send_command(self.linear_velocity, self.angular_velocity + correction_angular_velocity)
+        # robot_state = self.send_command(self.twist.linear.x, self.twist.angular.z)
         if robot_state is None:
             return
 
@@ -85,7 +110,7 @@ class RobotControlNode(Node):
         t.child_frame_id = 'base_link'
         t.transform.translation.x = robot_state.x_pos
         t.transform.translation.y = robot_state.y_pos
-        t.transform.translation.z = 0.0325
+        t.transform.translation.z = 0.0
         t.transform.rotation = robot_orientation
         
         # odometry twist
@@ -95,7 +120,7 @@ class RobotControlNode(Node):
         odom_msg.child_frame_id = 'base_link'
         odom_msg.pose.pose.position.x = robot_state.x_pos
         odom_msg.pose.pose.position.y = robot_state.y_pos
-        odom_msg.pose.pose.position.z = 0.325
+        odom_msg.pose.pose.position.z = 0.0
         odom_msg.pose.pose.orientation = robot_orientation
         odom_msg.twist.twist.linear.x = robot_state.v
         odom_msg.twist.twist.angular.z = robot_state.w
@@ -105,9 +130,52 @@ class RobotControlNode(Node):
         # self.log_robot_state(robot_state)
 
         # broadcast and publish
-        self.tf_broadcaster.sendTransform(t)
+        # self.tf_broadcaster.sendTransform(t)
         self.odom_publisher.publish(odom_msg)
 
+    def velocity_adjust_manager(self):
+        # Adjust linear velocity
+        if self.twist.linear.x == 0:
+            if abs(self.linear_velocity) > self.linear_acceleration:
+                if self.linear_velocity > 0:
+                    self.linear_velocity -= self.linear_acceleration
+                else:
+                    self.linear_velocity += self.linear_acceleration
+            else:
+                self.linear_velocity = 0
+        elif abs(self.twist.linear.x - self.linear_velocity) > self.linear_acceleration:
+            if self.twist.linear.x > self.linear_velocity:
+                self.linear_velocity += self.linear_acceleration
+            else:
+                self.linear_velocity -= self.linear_acceleration
+        else:
+            self.linear_velocity = self.twist.linear.x
+
+        # Adjust angular velocity
+        if self.twist.angular.z == 0:
+            if abs(self.angular_velocity) > self.angular_acceleration:
+                if self.angular_velocity > 0:
+                    self.angular_velocity -= self.angular_acceleration
+                else:
+                    self.angular_velocity += self.angular_acceleration
+            else:
+                self.angular_velocity = 0
+        elif abs(self.twist.angular.z - self.angular_velocity) > self.angular_acceleration:
+            if self.twist.angular.z > self.angular_velocity:
+                self.angular_velocity += self.angular_acceleration
+            else:
+                self.angular_velocity -= self.angular_acceleration
+        else:
+            self.angular_velocity = self.twist.angular.z
+
+        # Check for large sudden changes
+        if abs(self.linear_velocity - self.prev_linear_velocity) > self.linear_acceleration * 5:
+            self.linear_velocity = self.prev_linear_velocity + self.linear_acceleration * 5 if self.linear_velocity > self.prev_linear_velocity else self.prev_linear_velocity - self.linear_acceleration * 5
+        if abs(self.angular_velocity - self.prev_angular_velocity) > self.angular_acceleration * 5:
+            self.angular_velocity = self.prev_angular_velocity + self.angular_acceleration * 5 if self.angular_velocity > self.prev_angular_velocity else self.prev_angular_velocity - self.angular_acceleration * 5
+
+        self.prev_linear_velocity = self.linear_velocity
+        self.prev_angular_velocity = self.angular_velocity
 
     def log_odometry(self, odom_msg):
         self.get_logger().info(f'Odom Message:')
@@ -150,7 +218,7 @@ class RobotControlNode(Node):
         self.get_logger().info(f'  Angular Velocity: {robot_state.w}')
 
     def send_command(self, linear: float, angular: float) -> SerialStatus:
-        self.get_logger().debug(f'Data to send: {linear}, {angular}')
+        # self.get_logger().info(f'[Send command] {linear}, {angular}')
         command = f'{linear:.3f},{angular:.3f}/'.encode('UTF-8')
         self.get_logger().debug(f'Sending command: "{command}"')
         self.ser.write(command)
@@ -171,8 +239,8 @@ class RobotControlNode(Node):
         if (len(res) < 79) or (len(res) > (79 + 13)):
             #self.get_logger().warn(f'Bad data: "{res}"')
             return None
-        # else:
-        #     self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
+        else:
+            self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
 
 
         try:
@@ -192,7 +260,7 @@ class RobotControlNode(Node):
     
     def twist_callback(self, twist: Twist):
         self.twist = twist
-        # self.get_logger().info(f'[Twist received] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
+        # self.get_logger().info(f'[Receive twist] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
 
 def main(args=None):
     rclpy.init(args=args)

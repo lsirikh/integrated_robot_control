@@ -17,8 +17,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='Your Name',
-    maintainer_email='your_email@example.com',
+    maintainer='lsirikh',
+    maintainer_email='lsirikh@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
@@ -27,6 +27,7 @@ setup(
             'control_node = integrated_robot_control.control_node:main',
             'data_report_node = integrated_robot_control.data_report_node:main',
             'ekf_node = integrated_robot_control.ekf_node:main',  # ekf_node 추가
+            'robot_control_profile = integrated_robot_control.robot_control_profile:main',  # 이 부분을 추가
         ],
     },
 )

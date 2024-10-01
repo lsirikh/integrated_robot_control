@@ -11,7 +11,9 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pico_port = LaunchConfiguration('pico_port', default='/dev/ttyACM0')
     rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/rplidar')
+    rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=256000)
     imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
+    imu_baudrate = LaunchConfiguration('imu_baudrate', default=9600)
     joy_config = LaunchConfiguration('joy_config', default='ps4')
     joy_dev = LaunchConfiguration('joy_dev', default='/dev/input/js0')
     config_filepath = LaunchConfiguration('config_filepath', default=[
@@ -19,7 +21,7 @@ def generate_launch_description():
     ])
 
     # EKF 설정 파일 경로
-    ekf_config = os.path.join(get_package_share_directory('integrated_robot_control'), 'config', 'ekf.yaml')
+    #ekf_config = os.path.join(get_package_share_directory('integrated_robot_control'), 'config', 'ekf.yaml')
     config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
 
     return LaunchDescription([
@@ -34,9 +36,19 @@ def generate_launch_description():
             description='Port for rplidar sensor'
         ),
         DeclareLaunchArgument(
+            'rplidar_baudrate',
+            default_value=rplidar_baudrate,
+            description='Baud rate for rplidar sensor'
+        ),
+        DeclareLaunchArgument(
             'imu_port',
             default_value=imu_port,
             description='Serial port for IMU'
+        ),
+        DeclareLaunchArgument(
+            'imu_baudrate',
+            default_value=imu_baudrate,
+            description='Baud rate for IMU'
         ),
         DeclareLaunchArgument(
             'joy_config',
@@ -57,13 +69,14 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(
                 [ThisLaunchFileDir(), '/lidar.launch.py']
             ),
-            launch_arguments={'serial_port': rplidar_port}.items()
+            launch_arguments={'serial_port': rplidar_port, 'serial_baudrate': rplidar_baudrate}.items()
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 [ThisLaunchFileDir(), '/imu.launch.py']
             ),
-            launch_arguments={'port': imu_port}.items()
+         
+            launch_arguments={'serial_port': imu_port, 'serial_baudrate': imu_baudrate}.items()
         ),
         Node(
             package='joy', executable='joy_node', name='joy_node',
@@ -79,12 +92,6 @@ def generate_launch_description():
             name='teleop_twist_joy_node', parameters=[config_filepath],
             output='screen'
         ),
-        # Node(
-        #     package='integrated_robot_control', executable='ekf_node',
-        #     name='ekf_node', 
-        #     output='screen',
-        #     parameters=[ekf_config]
-        # ),
         Node(
             package='integrated_robot_control', executable='control_node',
             name='control_node', 
@@ -108,6 +115,12 @@ def generate_launch_description():
             name='ekf_set_measurement_covariance_node',
             output='screen'
         ),
+        # 새로 추가된 robot_control_profile 노드
+        # Node(
+        #     package='integrated_robot_control', executable='robot_control_profile',
+        #     name='robot_control_profile_node',
+        #     output='screen'
+        # ),
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
@@ -117,7 +130,14 @@ def generate_launch_description():
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
+            arguments=['0.0', '0.0', '0.05', '0', '0', '0', 'base_link', 'imu_link'],
+            output='screen'
+        ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
             arguments=['0', '0', '0.0325', '0', '0', '0', 'base_link', 'base_footprint'],
             output='screen'
         )
+        
     ])
