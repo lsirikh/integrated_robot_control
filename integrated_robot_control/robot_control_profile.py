@@ -4,6 +4,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu, LaserScan
 from geometry_msgs.msg import Twist
 
 
@@ -14,9 +15,16 @@ class RobotControlProfileNode(Node):
         # 오도메트리 구독 및 속도 명령 퍼블리셔 설정
         self.odom_subscription = self.create_subscription(
             Odometry, '/odometry/fused', self.odom_callback, 10)
+        self.imu_subscription = self.create_subscription(Imu, '/imu/data', self.imu_callback, 10)
+        self.lidar_subscription = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
         self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
         self.is_fused_started = False
+
+        # 센서 데이터 수신 여부 플래그
+        self.odom_received = False
+        self.imu_received = False
+        self.lidar_received = False
 
         # 제어 파라미터 초기화
         self.linear_speed = 0.25  # m/s
@@ -33,15 +41,15 @@ class RobotControlProfileNode(Node):
 
         # 움직임 시퀀스 설정
         self.movement_sequence = [
-            {'action': 'forward', 'speed': 0.25, 'value': 1.0},
+            {'action': 'forward', 'speed': 0.20, 'value': 1.0},
             {'action': 'right_turn', 'speed': 15, 'value': math.radians(89.78)},
             {'action': 'forward', 'speed': 0.15, 'value': 0.2},
             {'action': 'right_turn', 'speed': 15, 'value': math.radians(89.78)},
-            {'action': 'forward', 'speed': 0.25, 'value': 1.0},
+            {'action': 'forward', 'speed': 0.20, 'value': 1.0},
             {'action': 'left_turn', 'speed': 15, 'value': math.radians(89.78)},
             {'action': 'forward', 'speed': 0.15, 'value': 0.2},
             {'action': 'left_turn', 'speed': 15, 'value': math.radians(89.78)},
-            # {'action': 'forward', 'speed': 0.25, 'value': 1.0},
+            {'action': 'forward', 'speed': 0.20, 'value': 1.0},
         ]
         self.current_step = 0
         self.reached_goal = False
@@ -53,16 +61,28 @@ class RobotControlProfileNode(Node):
 
     def odom_callback(self, msg):
         """오도메트리 콜백에서 현재 위치와 방향 업데이트"""
+        self.odom_received = True  # 오도메트리 데이터가 수신됨
         if not self.is_fused_started:
             self.is_fused_started = True
             # 시작 위치와 방향 저장
             self.start_x = msg.pose.pose.position.x
             self.start_y = msg.pose.pose.position.y
             self.start_yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
-
+        
+        # 로그 추가: 오도메트리 데이터 수신 여부 확인
+        self.get_logger().info(f"Fused_odom data: x={msg.pose.pose.position.x}, y={msg.pose.pose.position.y}")
+        
         self.current_x = msg.pose.pose.position.x
         self.current_y = msg.pose.pose.position.y
         self.current_yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
+
+    def imu_callback(self, msg):
+        """IMU 콜백"""
+        self.imu_received = True  # IMU 데이터가 수신됨
+
+    def lidar_callback(self, msg):
+        """LiDAR 콜백"""
+        self.lidar_received = True  # LiDAR 데이터가 수신됨
 
     def quaternion_to_yaw(self, q):
         """쿼터니언에서 yaw 값을 계산"""
@@ -85,12 +105,10 @@ class RobotControlProfileNode(Node):
     def move_forward(self, target_speed, target_distance= 0.1):
         """로봇을 지정된 거리만큼 전진시키는 함수"""
         self.linear_speed = target_speed
-        distance_travelled = self.calculate_distance(
-            self.start_x, self.start_y, self.current_x, self.current_y)
+        distance_travelled = self.calculate_distance(self.start_x, self.start_y, self.current_x, self.current_y)
 
         # 현재 값과 목표 값을 로그로 출력
-        self.get_logger().info(
-            f"Moving forward: Target distance={target_distance:.2f}, Current distance={distance_travelled:.2f}")
+        self.get_logger().info(f"Moving forward: Target distance={target_distance:.2f}, Current distance={distance_travelled:.2f}")
 
         twist = Twist()
         if distance_travelled < target_distance:
@@ -166,10 +184,11 @@ class RobotControlProfileNode(Node):
             return True  # 회전 완료
 
     def control_loop(self):
-        """로봇이 지정된 프로파일로 움직이도록 제어"""
-        if not self.is_fused_started:
+        """모든 데이터가 수신되면 움직이기 시작"""
+        if not (self.odom_received and self.imu_received and self.lidar_received):
+            self.get_logger().info("Waiting for all sensor data...")
             return
-
+        
         if self.reached_goal:
             self.get_logger().info("Goal reached. Stopping the robot.")
             self.stop_robot()
