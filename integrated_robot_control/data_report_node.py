@@ -3,11 +3,35 @@ import csv
 from datetime import datetime
 import math
 import time
-
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, LaserScan, Joy
+
+
+def quaternion_to_yaw(msg):
+    """
+    ROS 메시지의 쿼터니언을 yaw 각도로 변환하는 함수입니다.
+
+    매개변수:
+        msg: Odometry 또는 Imu 메시지와 같이 orientation 정보를 포함하는 ROS 메시지
+
+    반환값:
+        yaw: 라디안 단위의 yaw 각도
+    """
+    # 쿼터니언 구성 요소 추출
+    x = msg.pose.pose.orientation.x
+    y = msg.pose.pose.orientation.y
+    z = msg.pose.pose.orientation.z
+    w = msg.pose.pose.orientation.w
+
+    # yaw (z축 회전) 계산
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+    return yaw
 
 class DataReportNode(Node):
     def __init__(self):
@@ -21,6 +45,11 @@ class DataReportNode(Node):
         self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
 
         self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
+
+        #robot initial coordinate with pose
+        self.robot_origin = None
+        self.latest_odom_pose = None  # 최신 오도메트리 포즈
+        self.lidar_global_points = None  # 변환된 레이저 포인트 저장
 
         self.odom_data = None
         self.imu_data = None
@@ -62,11 +91,11 @@ class DataReportNode(Node):
                                     'ekf_orientation_x', 'ekf_orientation_y', 'ekf_orientation_z', 'ekf_orientation_w',
                                     'ekf_linear_x', 'ekf_linear_y', 'ekf_linear_z',
                                     'ekf_angular_x', 'ekf_angular_y', 'ekf_angular_z',
-
+                                    'robot_x', 'robot_y', 'robot_yaw',
                                     'lidar_data'
                                 ])
         # timer callback based csv logs storing process
-        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.timer = self.create_timer(0.5, self.timer_callback)
 
         # planned-route 
         self.points = [
@@ -121,6 +150,27 @@ class DataReportNode(Node):
         ]
 
     def ekf_callback(self, msg):
+        """Odometry 콜백 함수"""
+        # Odometry로부터 위치와 방향 추출
+        yaw = quaternion_to_yaw(msg)
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        # 로봇의 초기 위치를 설정
+        if self.robot_origin is None:
+            self.robot_origin = [x, y, yaw]
+
+        # Odometry 데이터를 초기 위치를 기준으로 보정
+        x -= self.robot_origin[0]
+        y -= self.robot_origin[1]
+        yaw -= self.robot_origin[2]
+
+        # yaw를 -π ~ π 범위로 조정
+        yaw = np.arctan2(np.sin(yaw), np.cos(yaw))
+
+        # 최신 Odometry 포즈 저장
+        self.latest_odom_pose = [x, y, yaw]
+
         self.ekf_data = [
             msg.pose.pose.position.x,
             msg.pose.pose.position.y,
@@ -137,29 +187,56 @@ class DataReportNode(Node):
             msg.twist.twist.angular.z
         ]
 
-    # # 콜백 함수: LiDAR 메시지 처리
     # def lidar_callback(self, msg):
+    #     # # 모든 속성과 값을 출력
+    #     # for attribute in dir(msg):
+    #     #     if not attribute.startswith('_'):  # 내부 속성은 제외
+    #     #         attribute_value = getattr(msg, attribute)
+    #     #         self.get_logger().info(f'{attribute}: {attribute_value}')
+    #     #self.get_logger().info(f'lidar_callback in data_report_node')
+
     #     angle_min = msg.angle_min
     #     angle_increment = msg.angle_increment
-    #     self.lidar_data = ','.join([f'[{angle_min + i * angle_increment:.2f},{dist:.2f}]' if np.isfinite(dist) else '[{angle_min + i * angle_increment:.2f},inf]' for i, dist in enumerate(msg.ranges)])
+    #     ranges = msg.ranges
 
+    #     self.lidar_data = []
+    #     for i, distance in enumerate(ranges):
+    #         angle = angle_min + i * angle_increment
+    #         angle_deg = angle * 180 / math.pi  # 라디안에서 각도로 변환
+    #         self.lidar_data.append((angle_deg, distance))
 
     def lidar_callback(self, msg):
-        # # 모든 속성과 값을 출력
-        # for attribute in dir(msg):
-        #     if not attribute.startswith('_'):  # 내부 속성은 제외
-        #         attribute_value = getattr(msg, attribute)
-        #         self.get_logger().info(f'{attribute}: {attribute_value}')
-        #self.get_logger().info(f'lidar_callback in data_report_node')
+        # 최신 오도메트리 데이터가 있는지 확인
+        if self.latest_odom_pose is None:
+            self.get_logger().warn('Odometry data is not available yet')
+            return
+
         angle_min = msg.angle_min
         angle_increment = msg.angle_increment
         ranges = msg.ranges
 
-        self.lidar_data = []
+        x_robot, y_robot, yaw = self.latest_odom_pose
+        self.lidar_global_points = []
+
         for i, distance in enumerate(ranges):
             angle = angle_min + i * angle_increment
-            angle_deg = angle * 180 / math.pi  # 라디안에서 각도로 변환
-            self.lidar_data.append((angle_deg, distance))
+
+            # 유효한 거리 데이터인지 확인
+            if not math.isfinite(distance) or distance < msg.range_min or distance > msg.range_max:
+                continue
+
+            # 로봇 프레임에서의 레이저 포인트 좌표 계산
+            x_laser = distance * math.cos(angle)
+            y_laser = distance * math.sin(angle)
+
+            # 전역 좌표계로 변환
+            cos_yaw = math.cos(yaw)
+            sin_yaw = math.sin(yaw)
+            x_global = cos_yaw * x_laser - sin_yaw * y_laser + x_robot
+            y_global = sin_yaw * x_laser + cos_yaw * y_laser + y_robot
+
+            # 변환된 좌표를 리스트에 추가
+            self.lidar_global_points.append((x_global, y_global))
     
     def joy_callback(self, msg):
         current_button_state = msg.buttons[2]  # O 버튼 상태
@@ -172,7 +249,7 @@ class DataReportNode(Node):
         self.save_data_to_csv()
 
     def save_data_to_csv(self):
-        if self.lidar_data is None:
+        if self.lidar_global_points is None:
             self.get_logger().warn('Lidar data is not available yet')
             return
         
@@ -193,7 +270,8 @@ class DataReportNode(Node):
         # no, x, y = self.points[self.point_index]
         # self.point_index = (self.point_index + 1) % len(self.points)  # 다음 데이터 포인트로 이동
 
-        lidar_data_str = ','.join([f'[{angle:.2f},{distance:.2f}]' for angle, distance in self.lidar_data])
+        # lidar_data_str = ','.join([f'[{angle:.2f},{distance:.2f}]' for angle, distance in self.lidar_data])
+        lidar_data_str = ';'.join([f'({x:.4f},{y:.4f})' for x, y in self.lidar_global_points])
 
         # with open(self.csv_file_path, mode='a') as file:
         #     writer = csv.writer(file)
@@ -219,6 +297,7 @@ class DataReportNode(Node):
                 *[f'{val:.4f}' for val in self.odom_data],
                 *[f'{val:.4f}' for val in self.imu_data],
                 *[f'{val:.4f}' for val in self.ekf_data],
+                *[f'{val:.4f}' for val in self.latest_odom_pose],
                 lidar_data_str
             ])
 

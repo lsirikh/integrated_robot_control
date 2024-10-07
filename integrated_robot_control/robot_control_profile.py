@@ -13,8 +13,8 @@ class RobotControlProfileNode(Node):
         super().__init__('robot_control_profile_node')
 
         # 오도메트리 구독 및 속도 명령 퍼블리셔 설정
-        self.odom_subscription = self.create_subscription(
-            Odometry, '/odometry/fused', self.odom_callback, 10)
+        self.odom_subscription = self.create_subscription(Odometry, '/odometry/fused', self.odom_callback, 10)
+        # self.odom_subscription = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.imu_subscription = self.create_subscription(Imu, '/imu/data', self.imu_callback, 10)
         self.lidar_subscription = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
         self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
@@ -29,8 +29,12 @@ class RobotControlProfileNode(Node):
         # 제어 파라미터 초기화
         self.linear_speed = 0.25  # m/s
         self.angular_speed = math.radians(25)  # rad/s
-        self.reduced_speed_factor = 1 / 3  # 속도를 1/3로 줄이는 비율
-        self.reduced_speed_factor_radian = 1 / 2  # 속도를 1/2로 줄이는 비율
+        self.reduced_speed_factor = 0.8  # 속도를 1/3로 줄이는 비율
+        self.reduced_speed_factor_radian = 0.8  # 속도를 1/2로 줄이는 비율
+
+        # 방향 보정을 위한 추가 파라미터
+        self.kp = 3.0  # 비례 상수 (적절히 조정 필요)
+        self.max_angular_speed = math.radians(20)  # 최대 각속도 (rad/s)
 
         self.start_x = 0.0
         self.start_y = 0.0
@@ -41,23 +45,21 @@ class RobotControlProfileNode(Node):
 
         # 움직임 시퀀스 설정
         self.movement_sequence = [
-            {'action': 'forward', 'speed': 0.20, 'value': 1.0},
-            {'action': 'right_turn', 'speed': 15, 'value': math.radians(89.78)},
-            {'action': 'forward', 'speed': 0.15, 'value': 0.2},
-            {'action': 'right_turn', 'speed': 15, 'value': math.radians(89.78)},
-            {'action': 'forward', 'speed': 0.20, 'value': 1.0},
-            {'action': 'left_turn', 'speed': 15, 'value': math.radians(89.78)},
-            {'action': 'forward', 'speed': 0.15, 'value': 0.2},
-            {'action': 'left_turn', 'speed': 15, 'value': math.radians(89.78)},
-            {'action': 'forward', 'speed': 0.20, 'value': 1.0},
+            {'action': 'forward', 'speed': 0.10, 'value': 1.0},
+            {'action': 'right_turn', 'speed': 30, 'value': math.radians(90)},
+            {'action': 'forward', 'speed': 0.10, 'value': 0.2},
+            {'action': 'right_turn', 'speed': 30, 'value': math.radians(90)},
+            {'action': 'forward', 'speed': 0.10, 'value': 1.0},
+            # {'action': 'left_turn', 'speed': 10, 'value': math.radians(89.78)},
+            # {'action': 'forward', 'speed': 0.10, 'value': 0.2},
+            # {'action': 'left_turn', 'speed': 10, 'value': math.radians(89.78)},
+            # {'action': 'forward', 'speed': 0.10, 'value': 1.0},
         ]
         self.current_step = 0
         self.reached_goal = False
 
-        
-
         # 주기적으로 명령을 발행하는 타이머 설정 (0.1초마다 호출)
-        self.control_timer = self.create_timer(0.1, self.control_loop)
+        self.control_timer = self.create_timer(0.01, self.control_loop)
 
     def odom_callback(self, msg):
         """오도메트리 콜백에서 현재 위치와 방향 업데이트"""
@@ -69,12 +71,12 @@ class RobotControlProfileNode(Node):
             self.start_y = msg.pose.pose.position.y
             self.start_yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
         
-        # 로그 추가: 오도메트리 데이터 수신 여부 확인
-        self.get_logger().info(f"Fused_odom data: x={msg.pose.pose.position.x}, y={msg.pose.pose.position.y}")
-        
         self.current_x = msg.pose.pose.position.x
         self.current_y = msg.pose.pose.position.y
         self.current_yaw = self.quaternion_to_yaw(msg.pose.pose.orientation)
+
+        # 로그 추가: 오도메트리 데이터 수신 여부 확인
+        self.get_logger().info(f"Fused_odom data: x={msg.pose.pose.position.x:0.4f}, y={msg.pose.pose.position.y:0.4f}, yaw={self.quaternion_to_yaw(msg.pose.pose.orientation):0.4f}")
 
     def imu_callback(self, msg):
         """IMU 콜백"""
@@ -117,16 +119,26 @@ class RobotControlProfileNode(Node):
                 twist.linear.x = self.linear_speed * self.reduced_speed_factor
             else:
                 twist.linear.x = self.linear_speed
+
+            # 방향 보정: 목표 yaw과 현재 yaw의 오차 계산
+            yaw_error = self.normalize_angle(self.start_yaw - self.current_yaw)
+            angular_correction = self.kp * yaw_error
+
+            # 각속도 제한
+            angular_correction = max(-self.max_angular_speed, min(self.max_angular_speed, angular_correction))
+            twist.angular.z = angular_correction
+
+            self.get_logger().info(f"Targeted linear.x={twist.linear.x:.2f}, angular.z={twist.angular.z:.2f}")
             self.cmd_vel_publisher.publish(twist)
             return False  # 아직 이동 중
         else:
             # 이동 완료
             twist.linear.x = 0.0
+            twist.angular.z = 0.0
             self.cmd_vel_publisher.publish(twist)
             self.start_x = self.current_x
             self.start_y = self.current_y
-            self.get_logger().info(
-                f"Forward movement of {target_distance}m completed.")
+            self.get_logger().info(f"Forward movement of {target_distance}m completed.")
             return True  # 이동 완료
 
     def turn_right(self, target_speed, target_angle):

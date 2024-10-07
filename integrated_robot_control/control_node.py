@@ -48,6 +48,8 @@ class SerialStatus:
     theta: float
     v: float
     w: float
+    tick_l: int
+    tick_r: int
 
 
 class RobotControlNode(Node):
@@ -59,7 +61,6 @@ class RobotControlNode(Node):
 
         self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, 10)
         self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
-        self.imu_subscription = self.create_subscription(Imu, '/imu/data_raw', self.imu_callback, 10)  # 추가: IMU 데이터 구독
 
 
         time.sleep(0.2)
@@ -71,15 +72,15 @@ class RobotControlNode(Node):
         self.angular_velocity = 0.0
         self.prev_linear_velocity = 0.0
         self.prev_angular_velocity = 0.0
-        self.linear_acceleration = 0.025
-        self.angular_acceleration = 0.05
+        self.linear_acceleration = 0.015
+        self.angular_acceleration = 0.10
 
         # IMU 데이터를 위한 변수 초기화
         self.current_roll = 0.0
         self.current_pitch = 0.0
 
         # set timer
-        self.pub_period = 0.04  # 0.02 seconds = 50 hz = pid rate for robot
+        self.pub_period = 0.03  # 0.02 seconds = 50 hz = pid rate for robot
         self.pub_timer = self.create_timer(self.pub_period, self.pub_callback)
         # tf
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -90,13 +91,13 @@ class RobotControlNode(Node):
         self.current_pitch = pitch
 
     def pub_callback(self):
-        self.velocity_adjust_manager()
+        #self.velocity_adjust_manager()
 
         # 보정 각속도 계산
-        correction_angular_velocity = -0.1 * self.current_pitch
-
-        robot_state = self.send_command(self.linear_velocity, self.angular_velocity + correction_angular_velocity)
-        # robot_state = self.send_command(self.twist.linear.x, self.twist.angular.z)
+        # correction_angular_velocity = -0.1 * self.current_pitch
+        # robot_state = self.send_command(self.linear_velocity, self.angular_velocity + correction_angular_velocity)
+        
+        robot_state = self.send_command(self.twist.linear.x, self.twist.angular.z)
         if robot_state is None:
             return
 
@@ -125,12 +126,36 @@ class RobotControlNode(Node):
         odom_msg.twist.twist.linear.x = robot_state.v
         odom_msg.twist.twist.angular.z = robot_state.w
 
+        # laser의 동적 트랜스폼 브로드캐스팅
+        t_laser = TransformStamped()
+        t_laser.header.stamp = timestamp
+        t_laser.header.frame_id = 'base_link'
+        t_laser.child_frame_id = 'laser'
+        t_laser.transform.translation.x = 0.0  # laser의 x 오프셋
+        t_laser.transform.translation.y = 0.0  # laser의 y 오프셋
+        t_laser.transform.translation.z = 0.12  # laser의 z 오프셋
+        t_laser.transform.rotation = quaternion_from_euler(0, 0, 0)
+
+        self.tf_broadcaster.sendTransform(t_laser)
+
+        # imu_link의 동적 트랜스폼 브로드캐스팅
+        t_imu = TransformStamped()
+        t_imu.header.stamp = timestamp
+        t_imu.header.frame_id = 'base_link'
+        t_imu.child_frame_id = 'imu_link'
+        t_imu.transform.translation.x = 0.0  # imu의 x 오프셋
+        t_imu.transform.translation.y = 0.0  # imu의 y 오프셋
+        t_imu.transform.translation.z = 0.05  # imu의 z 오프셋
+        t_imu.transform.rotation = quaternion_from_euler(0, 0, 0)
+
+        self.tf_broadcaster.sendTransform(t_imu)
+
         # Log the odometry message
         # self.log_odometry(odom_msg)
         # self.log_robot_state(robot_state)
 
         # broadcast and publish
-        # self.tf_broadcaster.sendTransform(t)
+        self.tf_broadcaster.sendTransform(t)
         self.odom_publisher.publish(odom_msg)
 
     def velocity_adjust_manager(self):
@@ -246,7 +271,7 @@ class RobotControlNode(Node):
         try:
             raw_list = res.strip().split('/')[1].split(',')
             values_list = [float(value) for value in raw_list]
-            if len(values_list) != 11:  # Ensure the list has the expected number of elements
+            if len(values_list) != 13:  # Ensure the list has the expected number of elements
                 self.get_logger().error(f'Unexpected number of elements in data: {values_list}')
                 return None
         except ValueError as e:

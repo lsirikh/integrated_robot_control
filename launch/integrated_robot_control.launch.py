@@ -13,7 +13,7 @@ def generate_launch_description():
     rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/rplidar')
     rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=256000)
     imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
-    imu_baudrate = LaunchConfiguration('imu_baudrate', default=9600)
+    imu_baudrate = LaunchConfiguration('imu_baudrate', default=115200)
     joy_config = LaunchConfiguration('joy_config', default='ps4')
     joy_dev = LaunchConfiguration('joy_dev', default='/dev/input/js0')
     config_filepath = LaunchConfiguration('config_filepath', default=[
@@ -21,8 +21,8 @@ def generate_launch_description():
     ])
 
     # EKF 설정 파일 경로
-    #ekf_config = os.path.join(get_package_share_directory('integrated_robot_control'), 'config', 'ekf.yaml')
     config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
+    ekf_config = os.path.join(config_dir, 'ekf.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -98,33 +98,42 @@ def generate_launch_description():
             output='screen',
             parameters=[{'pico_port': pico_port}]
         ),
-        Node(
-            package='integrated_robot_control', executable='data_report_node',
-            name='data_report_node', 
-            output='screen',
-        ),
-        Node(
-            package='ekf_robot_control',
-            executable='main_node',
-            name='ekf_main_node',
-            output='screen'
-        ),
-        Node(
-            package='ekf_robot_control',
-            executable='set_measurement_covariance_node',
-            name='ekf_set_measurement_covariance_node',
-            output='screen'
-        ),
+        # Node(
+        #     package='integrated_robot_control', executable='data_report_node',
+        #     name='data_report_node', 
+        #     output='screen',
+        # ),
+        # Node(
+        #     package='ekf_robot_control',
+        #     executable='main_node',
+        #     name='ekf_main_node',
+        #     output='screen'
+        # ),
+        # Node(
+        #     package='ekf_robot_control',
+        #     executable='set_measurement_covariance_node',
+        #     name='ekf_set_measurement_covariance_node',
+        #     output='screen'
+        # ),
         # 새로 추가된 robot_control_profile 노드
         # Node(
         #     package='integrated_robot_control', executable='robot_control_profile',
         #     name='robot_control_profile_node',
         #     output='screen'
         # ),
+
+        # robot_localization EKF node
+        # Node(
+        #     package='robot_localization',
+        #     executable='ekf_node',
+        #     name='ekf_filter_node',
+        #     output='screen',
+        #     parameters=[ekf_config],
+        # ),
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['-0.064', '0', '0.120', '0', '0', '0', 'base_link', 'laser'],
+            arguments=['0.0', '0', '0.12', '0', '0', '0', 'base_link', 'laser'],
             output='screen'
         ),
         Node(
