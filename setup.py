@@ -13,7 +13,6 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
-        ('share/' + package_name + '/config', glob('config/*.yaml')),  # 이 부분을 확인
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -26,7 +25,6 @@ setup(
         'console_scripts': [
             'control_node = integrated_robot_control.control_node:main',
             'data_report_node = integrated_robot_control.data_report_node:main',
-            'ekf_node = integrated_robot_control.ekf_node:main',  # ekf_node 추가
             'robot_control_profile = integrated_robot_control.robot_control_profile:main',  # 이 부분을 추가
         ],
     },

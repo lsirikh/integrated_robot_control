@@ -14,15 +14,6 @@ def generate_launch_description():
     rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=256000)
     imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
     imu_baudrate = LaunchConfiguration('imu_baudrate', default=115200)
-    joy_config = LaunchConfiguration('joy_config', default='ps4')
-    joy_dev = LaunchConfiguration('joy_dev', default='/dev/input/js0')
-    config_filepath = LaunchConfiguration('config_filepath', default=[
-        LaunchConfiguration('config_dir'), '/', joy_config, '.config.yaml'
-    ])
-
-    # EKF 설정 파일 경로
-    config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
-    ekf_config = os.path.join(config_dir, 'ekf.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -50,21 +41,7 @@ def generate_launch_description():
             default_value=imu_baudrate,
             description='Baud rate for IMU'
         ),
-        DeclareLaunchArgument(
-            'joy_config',
-            default_value=joy_config,
-            description='Configuration for joystick'
-        ),
-        DeclareLaunchArgument(
-            'joy_dev',
-            default_value=joy_dev,
-            description='Joystick device'
-        ),
-        DeclareLaunchArgument(
-            'config_dir',
-            default_value=config_dir,
-            description='Configuration directory'
-        ),
+       
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 [ThisLaunchFileDir(), '/lidar.launch.py']
@@ -79,73 +56,30 @@ def generate_launch_description():
             launch_arguments={'serial_port': imu_port, 'serial_baudrate': imu_baudrate}.items()
         ),
         Node(
-            package='joy', executable='joy_node', name='joy_node',
-            parameters=[{
-                'dev': joy_dev,
-                'deadzone': 0.1,
-                'autorepeat_rate': 20.0,
-            }],
-            output='screen'
-        ),
-        Node(
-            package='teleop_twist_joy', executable='teleop_node',
-            name='teleop_twist_joy_node', parameters=[config_filepath],
-            output='screen'
-        ),
-        Node(
             package='integrated_robot_control', executable='control_node',
             name='control_node', 
             output='screen',
             parameters=[{'pico_port': pico_port}]
         ),
-        # Node(
-        #     package='integrated_robot_control', executable='data_report_node',
-        #     name='data_report_node', 
-        #     output='screen',
-        # ),
-        # Node(
-        #     package='ekf_robot_control',
-        #     executable='main_node',
-        #     name='ekf_main_node',
-        #     output='screen'
-        # ),
-        # Node(
-        #     package='ekf_robot_control',
-        #     executable='set_measurement_covariance_node',
-        #     name='ekf_set_measurement_covariance_node',
-        #     output='screen'
-        # ),
-        # 새로 추가된 robot_control_profile 노드
-        # Node(
-        #     package='integrated_robot_control', executable='robot_control_profile',
-        #     name='robot_control_profile_node',
-        #     output='screen'
-        # ),
-
-        # robot_localization EKF node
-        # Node(
-        #     package='robot_localization',
-        #     executable='ekf_node',
-        #     name='ekf_filter_node',
-        #     output='screen',
-        #     parameters=[ekf_config],
-        # ),
+        # static transform for laser
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['0.0', '0', '0.12', '0', '0', '0', 'base_link', 'laser'],
+            arguments=['-0.12', '0', '0.28', '0', '0', '0', 'base_link', 'laser'],
             output='screen'
         ),
+        # static transform for imu
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['0.0', '0.0', '0.05', '0', '0', '0', 'base_link', 'imu_link'],
+            arguments=['-0.12', '0', '0.18', '0', '0', '0', 'base_link', 'imu'],
             output='screen'
         ),
+        # static transform from link to footprint
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['0', '0', '0.0325', '0', '0', '0', 'base_link', 'base_footprint'],
+            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_footprint'],
             output='screen'
         )
         
