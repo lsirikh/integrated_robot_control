@@ -2,12 +2,14 @@ import os
 import csv
 from datetime import datetime
 import math
-import time
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Imu, LaserScan, Joy
+from sensor_msgs.msg import Imu, LaserScan
+from tf2_ros import TransformListener, Buffer
+from rclpy.time import Time
+
 
 
 def quaternion_to_yaw(msg):
@@ -39,12 +41,15 @@ class DataReportNode(Node):
 
         self.get_logger().info('Start Data Report Node initialized')
          # 구독자 생성: 오도메트리 메시지
-        self.odom_sub = self.create_subscription(Odometry, '/odom/data', self.odom_callback, 10)
-        self.imu_sub = self.create_subscription(Imu, '/imu/data', self.imu_callback, 10)
-        self.ekf_sub = self.create_subscription(Odometry, '/odometry/fused', self.ekf_callback, 10)
-        self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
+        self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.imu_sub = self.create_subscription(Imu, '/imu/data_raw', self.imu_callback, 10)
+        #self.ekf_sub = self.create_subscription(Odometry, '/odometry/filtered', self.ekf_callback, 10)
+        self.ekf_sub = self.create_subscription(Odometry, '/odometry/filtered', self.ekf_callback, 10)
+        #self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
 
-        self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
+        #tf_recorder
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         #robot initial coordinate with pose
         self.robot_origin = None
@@ -92,7 +97,8 @@ class DataReportNode(Node):
                                     'ekf_linear_x', 'ekf_linear_y', 'ekf_linear_z',
                                     'ekf_angular_x', 'ekf_angular_y', 'ekf_angular_z',
                                     'robot_x', 'robot_y', 'robot_yaw',
-                                    'lidar_data'
+                                    #'lidar_data'
+                                    'true_x', 'true_y'
                                 ])
         # timer callback based csv logs storing process
         self.timer = self.create_timer(0.5, self.timer_callback)
@@ -238,21 +244,12 @@ class DataReportNode(Node):
             # 변환된 좌표를 리스트에 추가
             self.lidar_global_points.append((x_global, y_global))
     
-    def joy_callback(self, msg):
-        current_button_state = msg.buttons[2]  # O 버튼 상태
-        if current_button_state == 1 and self.previous_button_state == 0:
-            self.save_data_to_csv()
-        self.previous_button_state = current_button_state
-
+ 
     # When timer callback is called, this method runs.
     def timer_callback(self):
         self.save_data_to_csv()
 
     def save_data_to_csv(self):
-        if self.lidar_global_points is None:
-            self.get_logger().warn('Lidar data is not available yet')
-            return
-        
         if self.imu_data is None:
             self.get_logger().warn('Imu data is not available yet')
             return
@@ -265,13 +262,13 @@ class DataReportNode(Node):
             self.get_logger().warn('Extended Kalman Filter data is not available yet')
             return
 
+        if self.tf_listener is None:
+            self.get_logger().warn('Extended Kalman Filter data is not available yet')
+            return
 
-        # self.get_logger().info(f'point_index : {self.point_index}')
-        # no, x, y = self.points[self.point_index]
-        # self.point_index = (self.point_index + 1) % len(self.points)  # 다음 데이터 포인트로 이동
 
         # lidar_data_str = ','.join([f'[{angle:.2f},{distance:.2f}]' for angle, distance in self.lidar_data])
-        lidar_data_str = ';'.join([f'({x:.4f},{y:.4f})' for x, y in self.lidar_global_points])
+        #lidar_data_str = ';'.join([f'({x:.4f},{y:.4f})' for x, y in self.lidar_global_points])
 
         # with open(self.csv_file_path, mode='a') as file:
         #     writer = csv.writer(file)
@@ -289,17 +286,35 @@ class DataReportNode(Node):
         #         f'{self.ekf_data[10]:.4f}', f'{self.ekf_data[11]:.4f}', f'{self.ekf_data[12]:.4f}'
         #         # , f'[{lidar_data_str}]'
         #     ])
-        with open(self.csv_file_path, mode='a') as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                # no, x, y,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                *[f'{val:.4f}' for val in self.odom_data],
-                *[f'{val:.4f}' for val in self.imu_data],
-                *[f'{val:.4f}' for val in self.ekf_data],
-                *[f'{val:.4f}' for val in self.latest_odom_pose],
-                lidar_data_str
-            ])
+
+        try:
+            # Get the latest transform between map and base_link
+            now = Time()
+            trans = self.tf_buffer.lookup_transform('map', 'base_link', now)
+            
+            # translation 값을 개별적으로 추출
+            translation = trans.transform.translation
+            translation_x = translation.x
+            translation_y = translation.y
+            translation_z = translation.z
+
+            with open(self.csv_file_path, mode='a') as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    # no, x, y,
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                    *[f'{val:.4f}' for val in self.odom_data],
+                    *[f'{val:.4f}' for val in self.imu_data],
+                    *[f'{val:.4f}' for val in self.ekf_data],
+                    *[f'{val:.4f}' for val in self.latest_odom_pose],
+                    f'{translation_x:.4f}', f'{translation_y:.4f}',
+                    #lidar_data_str
+                ])
+
+        except Exception as e:
+            self.get_logger().warn(f'Could not get transform: {e}')
+
+        
 
 
 def main(args=None):

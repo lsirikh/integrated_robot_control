@@ -14,11 +14,11 @@ from tf2_ros import TransformBroadcaster
 import transforms3d.euler
 
 from std_msgs.msg import String
-from geometry_msgs.msg import Twist, Quaternion, TransformStamped
+from geometry_msgs.msg import Twist, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu  # 추가: IMU 데이터를 받기 위함
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
-
+from rclpy.qos import QoSProfile
 
 
 @dataclass
@@ -43,11 +43,16 @@ class RobotControlNode(Node):
     """Simple node for controlling a differential drive robot"""
     def __init__(self):
         super().__init__('rpi_robot_node')
-        self.get_logger().debug(f'Raspberry pi pico was declared!')
+        self.get_logger().info(f'Raspberry pi pico was declared!')
         self.declare_parameter('pico_port', '/dev/ttyACM0')
 
-        self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, 10)
-        self.odom_publisher = self.create_publisher(Odometry, '/robot/odom', 10)
+
+        timestamp = self.get_clock().now().to_msg()
+        qos_profile = QoSProfile(depth=10)
+        self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, qos_profile)
+        self.odom_publisher = self.create_publisher(Odometry, '/odom', qos_profile)
+        self.pose_publisher = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', qos_profile)
+        
 
 
         time.sleep(0.2)
@@ -67,8 +72,11 @@ class RobotControlNode(Node):
         self.current_pitch = 0.0
 
         # set timer
-        self.pub_period = 0.03  # 0.02 seconds = 50 hz = pid rate for robot
+        self.pub_period = 0.02  # 0.02 seconds = 50 hz = pid rate for robot
         self.pub_timer = self.create_timer(self.pub_period, self.pub_callback)
+        # self.pose_period = 10
+        # self.pose_timer = self.create_timer(self.pose_period, self.pose_callback)
+        
         # tf
         self.tf_broadcaster = TransformBroadcaster(self)
     
@@ -76,6 +84,18 @@ class RobotControlNode(Node):
         roll, pitch, yaw = euler_from_quaternion(msg.orientation)
         self.current_roll = roll
         self.current_pitch = pitch
+
+    def pose_callback(self):
+        timestamp = self.get_clock().now().to_msg()
+        initial_pose = PoseWithCovarianceStamped()
+        initial_pose.header.stamp = timestamp
+        initial_pose.header.frame_id = 'map'
+        initial_pose.pose.pose.position.x = 0.0
+        initial_pose.pose.pose.position.y = 0.0
+        initial_pose.pose.pose.orientation.z = 0.0
+        initial_pose.pose.pose.orientation.w = 1.0
+
+        self.pose_publisher.publish(initial_pose)
 
     def pub_callback(self):
         #self.velocity_adjust_manager()
@@ -118,6 +138,8 @@ class RobotControlNode(Node):
 
         # # broadcast and publish
         # self.tf_broadcaster.sendTransform(t)
+
+        
 
     def velocity_adjust_manager(self):
         # Adjust linear velocity
@@ -180,14 +202,14 @@ class RobotControlNode(Node):
     def send_command(self, linear: float, angular: float) -> SerialStatus:
         # self.get_logger().info(f'[Send command] {linear}, {angular}')
         command = f'{linear:.3f},{angular:.3f}/'.encode('UTF-8')
-        self.get_logger().debug(f'Sending command: "{command}"')
+        #self.get_logger().debug(f'Sending command: "{command}"')
         self.ser.write(command)
         while self.ser.in_waiting == 0:
             time.sleep(0.01)  # 짧은 시간 동안 대기
 
         res = self.ser.read(self.ser.in_waiting).decode('UTF-8')
 
-        self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
+        #self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
         if (len(res) < 83) or (len(res) > (83 + 30)):
             #self.get_logger().warn(f'Bad data: "{res}"')
             return None
@@ -196,7 +218,7 @@ class RobotControlNode(Node):
             raw_list = res.strip().split('/')[1].split(',')
             values_list = [float(value) for value in raw_list]
             csv_line = ','.join([str(value) for value in values_list])
-            self.get_logger().info(f'correct data ==> {csv_line}')
+            #self.get_logger().info(f'correct data ==> {csv_line}')
 
             #self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
             if len(values_list) != 13:  # Ensure the list has the expected number of elements

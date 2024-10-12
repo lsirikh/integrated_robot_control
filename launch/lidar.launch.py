@@ -14,7 +14,7 @@ def generate_launch_description():
     frame_id = LaunchConfiguration('frame_id', default='base_link')
     inverted = LaunchConfiguration('inverted', default='false')
     angle_compensate = LaunchConfiguration('angle_compensate', default='true')
-    scan_mode = LaunchConfiguration('scan_mode', default='Sensitivity')
+    scan_mode = LaunchConfiguration('scan_mode', default='Express')
     
     return LaunchDescription([
         DeclareLaunchArgument(

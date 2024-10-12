@@ -7,6 +7,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import ThisLaunchFileDir
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
 
 def generate_launch_description():
     pico_port = LaunchConfiguration('pico_port', default='/dev/ttyACM0')
@@ -68,11 +70,16 @@ def generate_launch_description():
             output='screen',
             parameters=[{'pico_port': pico_port}]
         ),
-        # Node(
-        #     package='integrated_robot_control', executable='data_report_node',
-        #     name='data_report_node', 
-        #     output='screen',
-        # ),
+        Node(
+            package='integrated_robot_control', executable='data_report_node',
+            name='data_report_node', 
+            output='screen',
+        ),
+        Node(
+            package='integrated_robot_control', executable='sensor_sync_node',
+            name='sensor_sync_node', 
+            output='screen',
+        ),
         # To change this node to service node - robot_control_profile Node
         # Node(
         #     package='integrated_robot_control', executable='robot_control_profile',
@@ -95,6 +102,15 @@ def generate_launch_description():
         #     output='screen'
         # ),
 
+        # slam_toolbox
+        # Node(
+        #     package='slam_toolbox',
+        #     executable='slam_toolbox',
+        #     name='slam_toolbox',
+        #     output='screen',
+        #     parameters=[{'use_sim_time': True}],
+        # ),
+
         # robot_localization EKF node
         Node(
             package='robot_localization',
@@ -104,6 +120,28 @@ def generate_launch_description():
             parameters=[ekf_config],
         ),
 
+        # nav2_amcl node
+        Node(
+            package='nav2_amcl',
+            executable='amcl',
+            name='amcl',
+            output='screen',
+            parameters=[{
+                'use_sim_time': False,
+                'map_subscribe_transient_local': True
+            }],
+            remappings=[('/tf', 'tf'),
+                        ('/tf_static', 'tf_static')],
+        ),
+
+        # initialpose 퍼블리싱 노드 추가
+        Node(
+            package='integrated_robot_control',
+            executable='initialpose_node',
+            name='initialpose_node',
+            output='screen',
+        ),
+        
         # static transform for laser
         Node(
             package='tf2_ros',
