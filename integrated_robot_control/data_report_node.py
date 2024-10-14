@@ -98,7 +98,7 @@ class DataReportNode(Node):
                                     'ekf_angular_x', 'ekf_angular_y', 'ekf_angular_z',
                                     'robot_x', 'robot_y', 'robot_yaw',
                                     #'lidar_data'
-                                    'true_x', 'true_y'
+                                    'map_x', 'map_y'
                                 ])
         # timer callback based csv logs storing process
         self.timer = self.create_timer(0.5, self.timer_callback)

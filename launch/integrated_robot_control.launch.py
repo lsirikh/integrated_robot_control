@@ -12,14 +12,15 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     pico_port = LaunchConfiguration('pico_port', default='/dev/ttyACM0')
-    rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/rplidar')
-    rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=256000)
-    imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
+    rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/ttyUSB0')
+    rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=115200)
+    imu_port = LaunchConfiguration('imu_port', default='/dev/ttyUSB1')
     imu_baudrate = LaunchConfiguration('imu_baudrate', default=115200)
 
     # EKF 설정 파일 경로
     config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
     ekf_config = os.path.join(config_dir, 'ekf.yaml')
+    amcl_config = os.path.join(config_dir, 'amcl_params.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -102,13 +103,13 @@ def generate_launch_description():
         #     output='screen'
         # ),
 
-        # slam_toolbox
+        # # slam_toolbox
         # Node(
         #     package='slam_toolbox',
         #     executable='slam_toolbox',
         #     name='slam_toolbox',
         #     output='screen',
-        #     parameters=[{'use_sim_time': True}],
+        #     parameters=[{'use_sim_time': False}],
         # ),
 
         # robot_localization EKF node
@@ -120,16 +121,26 @@ def generate_launch_description():
             parameters=[ekf_config],
         ),
 
-        # nav2_amcl node
+        # # nav2_amcl node
+        # Node(
+        #     package='nav2_amcl',
+        #     executable='amcl',
+        #     name='amcl',
+        #     output='screen',
+        #     parameters=[{
+        #         'use_sim_time': False,
+        #         'map_subscribe_transient_local': True
+        #     }],
+        #     remappings=[('/tf', 'tf'),
+        #                 ('/tf_static', 'tf_static')],
+        # ),
+
         Node(
             package='nav2_amcl',
             executable='amcl',
             name='amcl',
             output='screen',
-            parameters=[{
-                'use_sim_time': False,
-                'map_subscribe_transient_local': True
-            }],
+            parameters=[amcl_config],
             remappings=[('/tf', 'tf'),
                         ('/tf_static', 'tf_static')],
         ),
