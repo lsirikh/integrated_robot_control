@@ -6,21 +6,24 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import ThisLaunchFileDir
-from launch_ros.actions import Node
+from launch_ros.actions import Node, LifecycleNode
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     pico_port = LaunchConfiguration('pico_port', default='/dev/ttyACM0')
-    rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/ttyUSB0')
-    rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=115200)
-    imu_port = LaunchConfiguration('imu_port', default='/dev/ttyUSB1')
+    rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/rplidar')
+    rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=256000)
+    imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
     imu_baudrate = LaunchConfiguration('imu_baudrate', default=115200)
 
     # EKF 설정 파일 경로
     config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
     ekf_config = os.path.join(config_dir, 'ekf.yaml')
     amcl_config = os.path.join(config_dir, 'amcl_params.yaml')
+
+    # 맵 파일 경로
+    map_file = os.path.join('/home/ubuntu/robot_ws', 'map_1729274679.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -120,21 +123,29 @@ def generate_launch_description():
             output='screen',
             parameters=[ekf_config],
         ),
-
-        # # nav2_amcl node
-        # Node(
-        #     package='nav2_amcl',
-        #     executable='amcl',
-        #     name='amcl',
+        
+        # # Map server lifecycle node
+        # LifecycleNode(
+        #     package='nav2_map_server',
+        #     executable='map_server',
+        #     name='map_server',
         #     output='screen',
-        #     parameters=[{
-        #         'use_sim_time': False,
-        #         'map_subscribe_transient_local': True
-        #     }],
-        #     remappings=[('/tf', 'tf'),
-        #                 ('/tf_static', 'tf_static')],
+        #     parameters=[{'yaml_filename': map_file}]
+        # ),
+        # # Lifecycle Manager node for map_server and amcl
+        # Node(
+        #     package='nav2_lifecycle_manager',
+        #     executable='lifecycle_manager',
+        #     name='lifecycle_manager_localization',
+        #     output='screen',
+        #     parameters=[
+        #         {'use_sim_time': False},
+        #         {'autostart': True},
+        #         {'node_names': ['map_server', 'amcl']}
+        #     ]
         # ),
 
+        # nav2_amcl node
         Node(
             package='nav2_amcl',
             executable='amcl',
