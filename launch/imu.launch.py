@@ -10,8 +10,8 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # serial_port = LaunchConfiguration('serial_port', default='/dev/ttyUSB0')
     serial_port = LaunchConfiguration('serial_port', default='/dev/imu_usb')
-    serial_baudrate = LaunchConfiguration('serial_baudrate', default=9600)
-    frame_id = LaunchConfiguration('frame_id', default='imu_link')
+    serial_baudrate = LaunchConfiguration('serial_baudrate', default=115200)
+    frame_id = LaunchConfiguration('frame_id', default='imu')
 
     return LaunchDescription([
         DeclareLaunchArgument(

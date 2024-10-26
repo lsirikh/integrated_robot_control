@@ -6,23 +6,24 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import ThisLaunchFileDir
-from launch_ros.actions import Node
+from launch_ros.actions import Node, LifecycleNode
+from launch_ros.substitutions import FindPackageShare
+
 
 def generate_launch_description():
     pico_port = LaunchConfiguration('pico_port', default='/dev/ttyACM0')
     rplidar_port = LaunchConfiguration('rplidar_port', default='/dev/rplidar')
     rplidar_baudrate = LaunchConfiguration('rplidar_baudrate', default=256000)
     imu_port = LaunchConfiguration('imu_port', default='/dev/imu_usb')
-    imu_baudrate = LaunchConfiguration('imu_baudrate', default=9600)
-    joy_config = LaunchConfiguration('joy_config', default='ps4')
-    joy_dev = LaunchConfiguration('joy_dev', default='/dev/input/js0')
-    config_filepath = LaunchConfiguration('config_filepath', default=[
-        LaunchConfiguration('config_dir'), '/', joy_config, '.config.yaml'
-    ])
+    imu_baudrate = LaunchConfiguration('imu_baudrate', default=115200)
 
     # EKF 설정 파일 경로
-    #ekf_config = os.path.join(get_package_share_directory('integrated_robot_control'), 'config', 'ekf.yaml')
     config_dir = os.path.join(get_package_share_directory('integrated_robot_control'), 'config')
+    ekf_config = os.path.join(config_dir, 'ekf.yaml')
+    amcl_config = os.path.join(config_dir, 'amcl_params.yaml')
+
+    # 맵 파일 경로
+    map_file = os.path.join('/home/ubuntu/robot_ws', 'map_1729274679.yaml')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -51,16 +52,6 @@ def generate_launch_description():
             description='Baud rate for IMU'
         ),
         DeclareLaunchArgument(
-            'joy_config',
-            default_value=joy_config,
-            description='Configuration for joystick'
-        ),
-        DeclareLaunchArgument(
-            'joy_dev',
-            default_value=joy_dev,
-            description='Joystick device'
-        ),
-        DeclareLaunchArgument(
             'config_dir',
             default_value=config_dir,
             description='Configuration directory'
@@ -75,22 +66,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(
                 [ThisLaunchFileDir(), '/imu.launch.py']
             ),
-         
             launch_arguments={'serial_port': imu_port, 'serial_baudrate': imu_baudrate}.items()
-        ),
-        Node(
-            package='joy', executable='joy_node', name='joy_node',
-            parameters=[{
-                'dev': joy_dev,
-                'deadzone': 0.2,
-                'autorepeat_rate': 20.0,
-            }],
-            output='screen'
-        ),
-        Node(
-            package='teleop_twist_joy', executable='teleop_node',
-            name='teleop_twist_joy_node', parameters=[config_filepath],
-            output='screen'
         ),
         Node(
             package='integrated_robot_control', executable='control_node',
@@ -104,39 +80,109 @@ def generate_launch_description():
             output='screen',
         ),
         Node(
-            package='ekf_robot_control',
-            executable='main_node',
-            name='ekf_main_node',
-            output='screen'
+            package='integrated_robot_control', executable='sensor_sync_node',
+            name='sensor_sync_node', 
+            output='screen',
         ),
-        Node(
-            package='ekf_robot_control',
-            executable='set_measurement_covariance_node',
-            name='ekf_set_measurement_covariance_node',
-            output='screen'
-        ),
-        # 새로 추가된 robot_control_profile 노드
+        # To change this node to service node - robot_control_profile Node
         # Node(
         #     package='integrated_robot_control', executable='robot_control_profile',
         #     name='robot_control_profile_node',
         #     output='screen'
         # ),
+
+        # # ekf_robot_control pkg node
+        # Uncertainty was too high to apply this package
+        # Node(
+        #     package='ekf_robot_control',
+        #     executable='main_node',
+        #     name='ekf_main_node',
+        #     output='screen'
+        # ),
+        # Node(
+        #     package='ekf_robot_control',
+        #     executable='set_measurement_covariance_node',
+        #     name='ekf_set_measurement_covariance_node',
+        #     output='screen'
+        # ),
+
+        # # slam_toolbox
+        # Node(
+        #     package='slam_toolbox',
+        #     executable='slam_toolbox',
+        #     name='slam_toolbox',
+        #     output='screen',
+        #     parameters=[{'use_sim_time': False}],
+        # ),
+
+        # robot_localization EKF node
+        Node(
+            package='robot_localization',
+            executable='ekf_node',
+            name='ekf_filter_node',
+            output='screen',
+            parameters=[ekf_config],
+        ),
+        
+        # # Map server lifecycle node
+        # LifecycleNode(
+        #     package='nav2_map_server',
+        #     executable='map_server',
+        #     name='map_server',
+        #     output='screen',
+        #     parameters=[{'yaml_filename': map_file}]
+        # ),
+        # # Lifecycle Manager node for map_server and amcl
+        # Node(
+        #     package='nav2_lifecycle_manager',
+        #     executable='lifecycle_manager',
+        #     name='lifecycle_manager_localization',
+        #     output='screen',
+        #     parameters=[
+        #         {'use_sim_time': False},
+        #         {'autostart': True},
+        #         {'node_names': ['map_server', 'amcl']}
+        #     ]
+        # ),
+
+        # nav2_amcl node
+        Node(
+            package='nav2_amcl',
+            executable='amcl',
+            name='amcl',
+            output='screen',
+            parameters=[amcl_config],
+            remappings=[('/tf', 'tf'),
+                        ('/tf_static', 'tf_static')],
+        ),
+
+        # initialpose 퍼블리싱 노드 추가
+        Node(
+            package='integrated_robot_control',
+            executable='initialpose_node',
+            name='initialpose_node',
+            output='screen',
+        ),
+        
+        # static transform for laser
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['-0.064', '0', '0.120', '0', '0', '0', 'base_link', 'laser'],
+            arguments=['-0.12', '0', '0.28', '0', '0', '0', 'base_link', 'laser'],
             output='screen'
         ),
+        # static transform for imu
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['0.0', '0.0', '0.05', '0', '0', '0', 'base_link', 'imu_link'],
+            arguments=['-0.12', '0', '0.18', '0', '0', '0', 'base_link', 'imu'],
             output='screen'
         ),
+        # static transform from link to footprint
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments=['0', '0', '0.0325', '0', '0', '0', 'base_link', 'base_footprint'],
+            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_footprint'],
             output='screen'
         )
         

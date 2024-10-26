@@ -14,25 +14,12 @@ from tf2_ros import TransformBroadcaster
 import transforms3d.euler
 
 from std_msgs.msg import String
-from geometry_msgs.msg import Twist, Quaternion, TransformStamped
+from geometry_msgs.msg import Twist, Quaternion, TransformStamped, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu  # 추가: IMU 데이터를 받기 위함
-import transforms3d.euler
+from tf_transformations import quaternion_from_euler, euler_from_quaternion
+from rclpy.qos import QoSProfile
 
-
-def quaternion_from_euler(roll, pitch, yaw) -> Quaternion:
-    q = transforms3d.euler.euler2quat(roll, pitch, yaw)
-    quaternion = Quaternion()
-    quaternion.x = q[1]
-    quaternion.y = q[2]
-    quaternion.z = q[3]
-    quaternion.w = q[0]
-    return quaternion
-
-def euler_from_quaternion(quaternion):
-    # quaternion -> euler
-    euler = transforms3d.euler.quat2euler([quaternion.w, quaternion.x, quaternion.y, quaternion.z])
-    return euler
 
 @dataclass
 class SerialStatus:
@@ -48,18 +35,24 @@ class SerialStatus:
     theta: float
     v: float
     w: float
+    tick_l: int
+    tick_r: int
 
 
 class RobotControlNode(Node):
     """Simple node for controlling a differential drive robot"""
     def __init__(self):
         super().__init__('rpi_robot_node')
-        self.get_logger().debug(f'Raspberry pi pico was declared!')
+        self.get_logger().info(f'Raspberry pi pico was declared!')
         self.declare_parameter('pico_port', '/dev/ttyACM0')
 
-        self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, 10)
-        self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
-        self.imu_subscription = self.create_subscription(Imu, '/imu/data_raw', self.imu_callback, 10)  # 추가: IMU 데이터 구독
+
+        timestamp = self.get_clock().now().to_msg()
+        qos_profile = QoSProfile(depth=10)
+        self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, qos_profile)
+        self.odom_publisher = self.create_publisher(Odometry, '/odom', qos_profile)
+        self.pose_publisher = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', qos_profile)
+        
 
 
         time.sleep(0.2)
@@ -71,16 +64,19 @@ class RobotControlNode(Node):
         self.angular_velocity = 0.0
         self.prev_linear_velocity = 0.0
         self.prev_angular_velocity = 0.0
-        self.linear_acceleration = 0.025
-        self.angular_acceleration = 0.05
+        self.linear_acceleration = 0.015
+        self.angular_acceleration = 0.10
 
         # IMU 데이터를 위한 변수 초기화
         self.current_roll = 0.0
         self.current_pitch = 0.0
 
         # set timer
-        self.pub_period = 0.04  # 0.02 seconds = 50 hz = pid rate for robot
+        self.pub_period = 0.02  # 0.02 seconds = 50 hz = pid rate for robot
         self.pub_timer = self.create_timer(self.pub_period, self.pub_callback)
+        # self.pose_period = 10
+        # self.pose_timer = self.create_timer(self.pose_period, self.pose_callback)
+        
         # tf
         self.tf_broadcaster = TransformBroadcaster(self)
     
@@ -89,29 +85,33 @@ class RobotControlNode(Node):
         self.current_roll = roll
         self.current_pitch = pitch
 
+    def pose_callback(self):
+        timestamp = self.get_clock().now().to_msg()
+        initial_pose = PoseWithCovarianceStamped()
+        initial_pose.header.stamp = timestamp
+        initial_pose.header.frame_id = 'map'
+        initial_pose.pose.pose.position.x = 0.0
+        initial_pose.pose.pose.position.y = 0.0
+        initial_pose.pose.pose.orientation.z = 0.0
+        initial_pose.pose.pose.orientation.w = 1.0
+
+        self.pose_publisher.publish(initial_pose)
+
     def pub_callback(self):
-        self.velocity_adjust_manager()
+        #self.velocity_adjust_manager()
 
-        # 보정 각속도 계산
-        correction_angular_velocity = -0.1 * self.current_pitch
-
-        robot_state = self.send_command(self.linear_velocity, self.angular_velocity + correction_angular_velocity)
-        # robot_state = self.send_command(self.twist.linear.x, self.twist.angular.z)
+        robot_state = self.send_command(self.twist.linear.x, self.twist.angular.z)
         if robot_state is None:
             return
 
-        robot_orientation = quaternion_from_euler(0, 0, robot_state.theta)
         timestamp = self.get_clock().now().to_msg()
-        
-        # transforms
-        t = TransformStamped()
-        t.header.stamp = timestamp
-        t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
-        t.transform.translation.x = robot_state.x_pos
-        t.transform.translation.y = robot_state.y_pos
-        t.transform.translation.z = 0.0
-        t.transform.rotation = robot_orientation
+         # tf_transformations 사용
+        q = quaternion_from_euler(0, 0, robot_state.theta)
+        robot_orientation = Quaternion()
+        robot_orientation.x = q[0]
+        robot_orientation.y = q[1]
+        robot_orientation.z = q[2]
+        robot_orientation.w = q[3]
         
         # odometry twist
         odom_msg = Odometry()
@@ -124,14 +124,22 @@ class RobotControlNode(Node):
         odom_msg.pose.pose.orientation = robot_orientation
         odom_msg.twist.twist.linear.x = robot_state.v
         odom_msg.twist.twist.angular.z = robot_state.w
-
-        # Log the odometry message
-        # self.log_odometry(odom_msg)
-        # self.log_robot_state(robot_state)
-
-        # broadcast and publish
-        # self.tf_broadcaster.sendTransform(t)
         self.odom_publisher.publish(odom_msg)
+
+        # # transforms
+        # t = TransformStamped()
+        # t.header.stamp = timestamp
+        # t.header.frame_id = 'odom'
+        # t.child_frame_id = 'base_link'
+        # t.transform.translation.x = robot_state.x_pos
+        # t.transform.translation.y = robot_state.y_pos
+        # t.transform.translation.z = 0.0
+        # t.transform.rotation = robot_orientation
+
+        # # broadcast and publish
+        # self.tf_broadcaster.sendTransform(t)
+
+        
 
     def velocity_adjust_manager(self):
         # Adjust linear velocity
@@ -177,32 +185,6 @@ class RobotControlNode(Node):
         self.prev_linear_velocity = self.linear_velocity
         self.prev_angular_velocity = self.angular_velocity
 
-    def log_odometry(self, odom_msg):
-        self.get_logger().info(f'Odom Message:')
-        self.get_logger().info(f'  Header:')
-        self.get_logger().info(f'    Stamp: {odom_msg.header.stamp.sec}.{odom_msg.header.stamp.nanosec}')
-        self.get_logger().info(f'    Frame ID: {odom_msg.header.frame_id}')
-        self.get_logger().info(f'  Child Frame ID: {odom_msg.child_frame_id}')
-        self.get_logger().info(f'  Pose:')
-        self.get_logger().info(f'    Position:')
-        self.get_logger().info(f'      x: {odom_msg.pose.pose.position.x}')
-        self.get_logger().info(f'      y: {odom_msg.pose.pose.position.y}')
-        self.get_logger().info(f'      z: {odom_msg.pose.pose.position.z}')
-        self.get_logger().info(f'    Orientation:')
-        self.get_logger().info(f'      x: {odom_msg.pose.pose.orientation.x}')
-        self.get_logger().info(f'      y: {odom_msg.pose.pose.orientation.y}')
-        self.get_logger().info(f'      z: {odom_msg.pose.pose.orientation.z}')
-        self.get_logger().info(f'      w: {odom_msg.pose.pose.orientation.w}')
-        self.get_logger().info(f'  Twist:')
-        self.get_logger().info(f'    Linear:')
-        self.get_logger().info(f'      x: {odom_msg.twist.twist.linear.x}')
-        self.get_logger().info(f'      y: {odom_msg.twist.twist.linear.y}')
-        self.get_logger().info(f'      z: {odom_msg.twist.twist.linear.z}')
-        self.get_logger().info(f'    Angular:')
-        self.get_logger().info(f'      x: {odom_msg.twist.twist.angular.x}')
-        self.get_logger().info(f'      y: {odom_msg.twist.twist.angular.y}')
-        self.get_logger().info(f'      z: {odom_msg.twist.twist.angular.z}')
-
     def log_robot_state(self, robot_state):
         self.get_logger().info(f'Robot State:')
         self.get_logger().info(f'  Left Ref Speed: {robot_state.left_ref_speed}')
@@ -220,33 +202,26 @@ class RobotControlNode(Node):
     def send_command(self, linear: float, angular: float) -> SerialStatus:
         # self.get_logger().info(f'[Send command] {linear}, {angular}')
         command = f'{linear:.3f},{angular:.3f}/'.encode('UTF-8')
-        self.get_logger().debug(f'Sending command: "{command}"')
+        #self.get_logger().debug(f'Sending command: "{command}"')
         self.ser.write(command)
-        # while self.ser.in_waiting == 0:
-        #     pass
-
-        # Wait for data with a timeout
-        timeout = 1.0  # 1 second timeout
-        start_time = time.time()
         while self.ser.in_waiting == 0:
-            if time.time() - start_time > timeout:
-                self.get_logger().error('Timeout waiting for response from serial port')
-                return None
-            time.sleep(0.01)  # Sleep briefly to prevent busy waiting
+            time.sleep(0.01)  # 짧은 시간 동안 대기
 
         res = self.ser.read(self.ser.in_waiting).decode('UTF-8')
 
-        if (len(res) < 79) or (len(res) > (79 + 13)):
+        #self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
+        if (len(res) < 83) or (len(res) > (83 + 30)):
             #self.get_logger().warn(f'Bad data: "{res}"')
             return None
-        else:
-            self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
-
 
         try:
             raw_list = res.strip().split('/')[1].split(',')
             values_list = [float(value) for value in raw_list]
-            if len(values_list) != 11:  # Ensure the list has the expected number of elements
+            csv_line = ','.join([str(value) for value in values_list])
+            #self.get_logger().info(f'correct data ==> {csv_line}')
+
+            #self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
+            if len(values_list) != 13:  # Ensure the list has the expected number of elements
                 self.get_logger().error(f'Unexpected number of elements in data: {values_list}')
                 return None
         except ValueError as e:
@@ -254,7 +229,6 @@ class RobotControlNode(Node):
             return None
         except IndexError as e:
             return None
-
 
         return SerialStatus(*values_list)
     
