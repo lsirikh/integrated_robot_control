@@ -163,6 +163,14 @@ def generate_launch_description():
             name='initialpose_node',
             output='screen',
         ),
+
+        # # imu_recorder_node 퍼블리싱 노드 추가
+        # Node(
+        #     package='integrated_robot_control',
+        #     executable='imu_recorder_node',
+        #     name='imu_recorder_node',
+        #     output='screen',
+        # ),
         
         # static transform for laser
         Node(

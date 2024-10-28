@@ -139,8 +139,6 @@ class RobotControlNode(Node):
         # # broadcast and publish
         # self.tf_broadcaster.sendTransform(t)
 
-        
-
     def velocity_adjust_manager(self):
         # Adjust linear velocity
         if self.twist.linear.x == 0:
