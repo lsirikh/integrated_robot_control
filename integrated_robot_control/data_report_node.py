@@ -6,6 +6,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Imu, LaserScan
 from tf2_ros import TransformListener, Buffer
 from rclpy.time import Time
@@ -27,6 +28,7 @@ class DataReportNode(Node):
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.imu_sub = self.create_subscription(Imu, '/imu/data_raw', self.imu_callback, 10)
         self.ekf_sub = self.create_subscription(Odometry, '/odometry/filtered', self.ekf_callback, 10)
+        self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         #self.lidar_sub = self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
 
         #tf_recorder
@@ -42,6 +44,8 @@ class DataReportNode(Node):
         self.prev_imu = None
         self.prev_ekf = None
         self.prev_time = None
+
+        self.rotation_command_received = False  # 회전 명령 플래그
 
         # Position and velocity estimates for IMU
         self.imu_position_x = 0.0
@@ -81,8 +85,18 @@ class DataReportNode(Node):
                                 ])
         # timer callback based csv logs storing process
         self.timer = self.create_timer(0.5, self.timer_callback)
+        self.tf_timer = self.create_timer(5.0, self.update_transform)  # Edited!!
 
-      
+    def cmd_vel_callback(self, msg):
+        # 회전 명령을 감지하여 플래그 설정
+        if msg.angular.z != 0 and msg.linear.x == 0:  # 회전 명령 감지 (선속도는 0, 각속도는 0이 아님)
+            if not self.rotation_command_received:
+                self.get_logger().info('Rotation command received, updating transform once')
+                self.update_transform()  # 단 한 번 transform 업데이트
+                self.rotation_command_received = True  # 이후로는 동일한 회전 명령에 대한 기록 방지
+        else:
+            self.rotation_command_received = False  # 직진 혹은 정지 상태로 돌아오면 플래그 해제
+
     def odom_callback(self, msg):
         yaw = quaternion_to_yaw(msg.pose.pose.orientation)
         linear_x = msg.twist.twist.linear.x
@@ -177,6 +191,19 @@ class DataReportNode(Node):
     def timer_callback(self):
         self.save_data_to_csv()
 
+    def update_transform(self):  # Edited!!
+        try:
+            if not self.rotation_command_received:
+                now = Time()
+                trans = self.tf_buffer.lookup_transform('map', 'base_link', now)
+                self.translation_x = trans.transform.translation.x
+                self.translation_y = trans.transform.translation.y
+            
+        except Exception as e:
+            self.get_logger().warn(f'Could not get transform: {e}')
+            self.translation_x = None
+            self.translation_y = None
+
     def save_data_to_csv(self):
         if self.imu_data is None:
             self.get_logger().warn('Imu data is not available yet')
@@ -190,20 +217,12 @@ class DataReportNode(Node):
             self.get_logger().warn('Extended Kalman Filter data is not available yet')
             return
 
-        if self.tf_listener is None:
-            self.get_logger().warn('Extended Kalman Filter data is not available yet')
+        if self.translation_x is None or self.translation_y is None:
+            self.get_logger().warn('Transform data not available yet')
             return
 
-
         try:
-            # Get the latest transform between map and base_link
-            now = Time()
-            trans = self.tf_buffer.lookup_transform('map', 'base_link', now)
             
-            # translation 값을 개별적으로 추출
-            translation_x = trans.transform.translation.x
-            translation_y = trans.transform.translation.y
-
             # 각 데이터의 값이 None이 아닌지 확인 후 float으로 변환
             odom_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.odom_data.values()]
             imu_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.imu_data.values()]
@@ -218,7 +237,7 @@ class DataReportNode(Node):
                     *["{:.4f}".format(val) for val in odom_values],
                     *["{:.4f}".format(val) for val in imu_values],
                     *["{:.4f}".format(val) for val in ekf_values],
-                    f'{translation_x:.4f}', f'{translation_y:.4f}',
+                    f'{self.translation_x:.4f}', f'{self.translation_y:.4f}' 
                     #lidar_data_str
                 ])
 
