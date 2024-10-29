@@ -106,14 +106,7 @@ def generate_launch_description():
         #     output='screen'
         # ),
 
-        # # slam_toolbox
-        # Node(
-        #     package='slam_toolbox',
-        #     executable='slam_toolbox',
-        #     name='slam_toolbox',
-        #     output='screen',
-        #     parameters=[{'use_sim_time': False}],
-        # ),
+     
 
         # robot_localization EKF node
         Node(
@@ -123,28 +116,7 @@ def generate_launch_description():
             output='screen',
             parameters=[ekf_config],
         ),
-        
-        # # Map server lifecycle node
-        # LifecycleNode(
-        #     package='nav2_map_server',
-        #     executable='map_server',
-        #     name='map_server',
-        #     output='screen',
-        #     parameters=[{'yaml_filename': map_file}]
-        # ),
-        # # Lifecycle Manager node for map_server and amcl
-        # Node(
-        #     package='nav2_lifecycle_manager',
-        #     executable='lifecycle_manager',
-        #     name='lifecycle_manager_localization',
-        #     output='screen',
-        #     parameters=[
-        #         {'use_sim_time': False},
-        #         {'autostart': True},
-        #         {'node_names': ['map_server', 'amcl']}
-        #     ]
-        # ),
-
+      
         # nav2_amcl node
         Node(
             package='nav2_amcl',

@@ -20,23 +20,31 @@ from sensor_msgs.msg import Imu  # 추가: IMU 데이터를 받기 위함
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from rclpy.qos import QoSProfile
 
+import binascii
 
 @dataclass
 class SerialStatus:
     """Class for different data given by the embedded system"""
-    left_ref_speed: float
-    right_ref_speed: float
     left_speed: float
     right_speed: float
-    left_effort: float
-    right_effort: float
     x_pos: float
     y_pos: float
     theta: float
     v: float
     w: float
-    tick_l: int
-    tick_r: int
+    
+
+def calculate_crc(data: str) -> int:
+    """Calculate CRC-16-CCITT for the given data string."""
+    crc = 0xFFFF
+    for byte in data.encode('utf-8'):
+        crc ^= byte << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc <<= 1
+    return crc & 0xFFFF
 
 
 class RobotControlNode(Node):
@@ -46,18 +54,15 @@ class RobotControlNode(Node):
         self.get_logger().info(f'Raspberry pi pico was declared!')
         self.declare_parameter('pico_port', '/dev/ttyACM0')
 
-
         timestamp = self.get_clock().now().to_msg()
         qos_profile = QoSProfile(depth=10)
         self.twist_subscription = self.create_subscription(Twist, 'cmd_vel', self.twist_callback, qos_profile)
         self.odom_publisher = self.create_publisher(Odometry, '/odom', qos_profile)
         self.pose_publisher = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', qos_profile)
-        
-
 
         time.sleep(0.2)
         self.port = self.get_parameter('pico_port').get_parameter_value().string_value
-        self.ser = serial.Serial(self.port, baudrate=115200, timeout=1)
+        self.ser = serial.Serial(self.port, baudrate=9600, timeout=1)
         self.get_logger().info(f'Using serial port {self.ser.name}')
         self.twist = Twist()
         self.linear_velocity = 0.0
@@ -72,13 +77,26 @@ class RobotControlNode(Node):
         self.current_pitch = 0.0
 
         # set timer
-        self.pub_period = 0.02  # 0.02 seconds = 50 hz = pid rate for robot
+        self.pub_period = 0.03  # 0.02 seconds = 50 hz = pid rate for robot
         self.pub_timer = self.create_timer(self.pub_period, self.pub_callback)
         # self.pose_period = 10
         # self.pose_timer = self.create_timer(self.pose_period, self.pose_callback)
         
         # tf
         self.tf_broadcaster = TransformBroadcaster(self)
+
+        # serial input Hz calculate
+        self.total_data_count = 0      # 전체 데이터 개수
+        self.valid_data_count = 0      # 정상 데이터 개수
+        self.last_time = None
+        self.avg_hz_sum = 0
+        self.avg_hz_count = 0
+        self.last_log_time = time.time()  # 마지막으로 평균을 출력한 시간
+
+        # 누적 성공 비율 계산을 위한 변수
+        self.cumulative_total_data_count = 0   # 누적된 총 데이터 개수
+        self.cumulative_valid_data_count = 0   # 누적된 정상 데이터 개수
+
     
     def imu_callback(self, msg):
         roll, pitch, yaw = euler_from_quaternion(msg.orientation)
@@ -139,100 +157,94 @@ class RobotControlNode(Node):
         # # broadcast and publish
         # self.tf_broadcaster.sendTransform(t)
 
-    def velocity_adjust_manager(self):
-        # Adjust linear velocity
-        if self.twist.linear.x == 0:
-            if abs(self.linear_velocity) > self.linear_acceleration:
-                if self.linear_velocity > 0:
-                    self.linear_velocity -= self.linear_acceleration
-                else:
-                    self.linear_velocity += self.linear_acceleration
-            else:
-                self.linear_velocity = 0
-        elif abs(self.twist.linear.x - self.linear_velocity) > self.linear_acceleration:
-            if self.twist.linear.x > self.linear_velocity:
-                self.linear_velocity += self.linear_acceleration
-            else:
-                self.linear_velocity -= self.linear_acceleration
-        else:
-            self.linear_velocity = self.twist.linear.x
-
-        # Adjust angular velocity
-        if self.twist.angular.z == 0:
-            if abs(self.angular_velocity) > self.angular_acceleration:
-                if self.angular_velocity > 0:
-                    self.angular_velocity -= self.angular_acceleration
-                else:
-                    self.angular_velocity += self.angular_acceleration
-            else:
-                self.angular_velocity = 0
-        elif abs(self.twist.angular.z - self.angular_velocity) > self.angular_acceleration:
-            if self.twist.angular.z > self.angular_velocity:
-                self.angular_velocity += self.angular_acceleration
-            else:
-                self.angular_velocity -= self.angular_acceleration
-        else:
-            self.angular_velocity = self.twist.angular.z
-
-        # Check for large sudden changes
-        if abs(self.linear_velocity - self.prev_linear_velocity) > self.linear_acceleration * 5:
-            self.linear_velocity = self.prev_linear_velocity + self.linear_acceleration * 5 if self.linear_velocity > self.prev_linear_velocity else self.prev_linear_velocity - self.linear_acceleration * 5
-        if abs(self.angular_velocity - self.prev_angular_velocity) > self.angular_acceleration * 5:
-            self.angular_velocity = self.prev_angular_velocity + self.angular_acceleration * 5 if self.angular_velocity > self.prev_angular_velocity else self.prev_angular_velocity - self.angular_acceleration * 5
-
-        self.prev_linear_velocity = self.linear_velocity
-        self.prev_angular_velocity = self.angular_velocity
-
-    def log_robot_state(self, robot_state):
-        self.get_logger().info(f'Robot State:')
-        self.get_logger().info(f'  Left Ref Speed: {robot_state.left_ref_speed}')
-        self.get_logger().info(f'  Right Ref Speed: {robot_state.right_ref_speed}')
-        self.get_logger().info(f'  Left Speed: {robot_state.left_speed}')
-        self.get_logger().info(f'  Right Speed: {robot_state.right_speed}')
-        self.get_logger().info(f'  Left Effort: {robot_state.left_effort}')
-        self.get_logger().info(f'  Right Effort: {robot_state.right_effort}')
-        self.get_logger().info(f'  X Position: {robot_state.x_pos}')
-        self.get_logger().info(f'  Y Position: {robot_state.y_pos}')
-        self.get_logger().info(f'  Theta: {robot_state.theta}')
-        self.get_logger().info(f'  Linear Velocity: {robot_state.v}')
-        self.get_logger().info(f'  Angular Velocity: {robot_state.w}')
-
     def send_command(self, linear: float, angular: float) -> SerialStatus:
-        # self.get_logger().info(f'[Send command] {linear}, {angular}')
         command = f'{linear:.3f},{angular:.3f}/'.encode('UTF-8')
-        #self.get_logger().debug(f'Sending command: "{command}"')
+        self.ser.reset_input_buffer()
         self.ser.write(command)
+        
+        start_time = time.time()
         while self.ser.in_waiting == 0:
-            time.sleep(0.01)  # 짧은 시간 동안 대기
+            if time.time() - start_time > 0.05:
+                self.get_logger().warn('Timeout waiting for data')
+                self.total_data_count += 1  # 수신 실패도 전체 데이터로 계산
+                self.cumulative_total_data_count += 1  # 누적 총 데이터에도 포함
+                return None
+            time.sleep(0.02)
 
-        res = self.ser.read(self.ser.in_waiting).decode('UTF-8')
-
-        #self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
-        if (len(res) < 83) or (len(res) > (83 + 30)):
-            #self.get_logger().warn(f'Bad data: "{res}"')
-            return None
+        res = self.ser.read(self.ser.in_waiting).decode('UTF-8').strip()
+        self.total_data_count += 1  # 수신된 데이터 수에 포함
+        self.cumulative_total_data_count += 1  # 누적 총 데이터에도 포함
 
         try:
-            raw_list = res.strip().split('/')[1].split(',')
-            values_list = [float(value) for value in raw_list]
-            csv_line = ','.join([str(value) for value in values_list])
-            #self.get_logger().info(f'correct data ==> {csv_line}')
+            # '/'로 입력값과 데이터 나누기
+            if '/' in res:
+                input_part, received_data = res.split('/', 1)
+            else:
+                self.get_logger().warn(f'Invalid format, missing "/": "{res}"')
+                return None
 
-            #self.get_logger().info(f'data: "{res}", bytes: {len(res)}')
-            if len(values_list) != 13:  # Ensure the list has the expected number of elements
+            # CRC 분리 및 데이터 유효성 검사
+            if ',' in received_data:
+                data_part, received_crc = received_data.rsplit(',', 1)
+                received_crc = int(received_crc.strip(), 16)  # 16진수로 CRC 변환
+            else:
+                self.get_logger().warn(f'Invalid format, missing CRC: "{received_data}"')
+                return None
+            
+            # self.get_logger().info(f'[{input_part}]/[{data_part}],[{received_crc}]')
+
+            # CRC Calculate
+            calculated_crc = calculate_crc(data_part)
+            if received_crc != calculated_crc:
+                self.get_logger().error(f'CRC mismatch: expected {calculated_crc:04X}, got {received_crc:04X}')
+                return None
+
+            raw_list = data_part.strip().split(',')
+            if len(raw_list) != 7:  # 필드 수 일치 확인
                 self.get_logger().error(f'Unexpected number of elements in data: {values_list}')
                 return None
-        except ValueError as e:
-            # self.get_logger().warn(f'Bad data: "{res}"')
-            return None
-        except IndexError as e:
+            
+            #At this line get the message successfully.
+            values_list = [float(value) for value in raw_list]
+            self.valid_data_count += 1  # 정상 데이터 개수 증가
+            self.cumulative_valid_data_count += 1  # 누적 정상 데이터에도 포함
+
+            # === 정상 데이터 수신 시 주파수 계산 ===
+            current_time = time.time()
+            if self.last_time is not None:
+                period = current_time - self.last_time
+                hz = 1.0 / period if period > 0 else 0
+                self.avg_hz_sum += hz
+                self.avg_hz_count += 1
+
+            self.last_time = current_time
+
+            # 1초마다 평균 Hz 및 정상/전체 비율 출력
+            if current_time - self.last_log_time >= 1.0:
+                if self.avg_hz_count > 0:
+                    avg_hz = self.avg_hz_sum / self.avg_hz_count
+                    success_ratio = (self.valid_data_count / self.total_data_count) * 100
+                    cumulative_success_ratio = (self.cumulative_valid_data_count / self.cumulative_total_data_count) * 100  # 누적 성공 비율
+                    self.get_logger().info(
+                        f"[INFO] Average Hz: {avg_hz:.2f} Hz, Success Rate: {self.valid_data_count}/{self.total_data_count} ({success_ratio:.2f}%)[{cumulative_success_ratio:.2f}%]"
+                    )
+                    # 평균 Hz와 성공 비율 초기화
+                    self.avg_hz_sum = 0
+                    self.avg_hz_count = 0
+                    self.valid_data_count = 0
+                    self.total_data_count = 0
+                self.last_log_time = current_time
+            # =====================================
+        
+            return SerialStatus(*values_list)
+        except (ValueError, IndexError) as e:
+            self.get_logger().warn(f'Parsing error: "{res}" for {e}')
             return None
 
-        return SerialStatus(*values_list)
-    
     def twist_callback(self, twist: Twist):
-        self.twist = twist
-        # self.get_logger().info(f'[Receive twist] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
+            self.twist = twist
+            # self.get_logger().info(f'[Receive twist] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
+
 
 def main(args=None):
     rclpy.init(args=args)

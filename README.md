@@ -20,7 +20,7 @@
 <hr>
 
 * Version : v1.0.0
-* Date : 2024-10-09
+* Date : 2024-10-29
 
 #### Goal
 * robot_localization was applied version
@@ -113,3 +113,16 @@ ekf_filter_node:
 
 ```
 ![My Image](./pics/Figure_1.png "Test data with above setting data")
+
+<hr>
+
+* Version : v1.0.1
+* Date : 2024-10-30
+
+#### Goal
+* sensor_sync_node was applied version
+
+1. The previously implemented sensor_sync_node did not actually publish synchronized topics, but this time, it does publish /sync/odom, /sync/imu, and /sync/scan.  
+2. The usbSerial used to collect odom data applies CRC to verify data integrity, but data corruption issues remain noticeable. The cumulative success rate is approximately around 70%, so further improvements are needed to address this issue.  
+
+![My Image](./pics/Figure_2.png "Test data with above setting data")
