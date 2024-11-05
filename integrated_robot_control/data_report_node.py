@@ -85,7 +85,7 @@ class DataReportNode(Node):
                                 ])
         # timer callback based csv logs storing process
         self.timer = self.create_timer(0.5, self.timer_callback)
-        self.tf_timer = self.create_timer(5.0, self.update_transform)  # Edited!!
+        self.tf_timer = self.create_timer(2.0, self.update_transform)  # Edited!!
 
     def cmd_vel_callback(self, msg):
         # 회전 명령을 감지하여 플래그 설정

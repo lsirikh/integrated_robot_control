@@ -126,3 +126,16 @@ ekf_filter_node:
 2. The usbSerial used to collect odom data applies CRC to verify data integrity, but data corruption issues remain noticeable. The cumulative success rate is approximately around 70%, so further improvements are needed to address this issue.  
 
 ![My Image](./pics/Figure_2.png "Test data with above setting data")
+
+
+<hr>
+
+* Version : v.1.1
+* Date : 2024-11-06
+
+#### Goal
+* Usb serial data communication for RaspberryPi-Pico was upgraded
+
+1. CRC was used to check message was fully transfered.  
+2. ctx, etx was added to the message to check the start point of it.  
+3. Message transfer rate was almost up to 100%.  
