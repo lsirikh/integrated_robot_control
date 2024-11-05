@@ -39,9 +39,7 @@ class SensorSyncNode(Node):
     def adjust_imu_orientation(self, imu_msg):
         # 쿼터니언을 이더 오일러 각으로 변환하여 yaw 값 추출
         orientation_q = imu_msg.orientation
-        _, _, yaw = euler_from_quaternion(
-            [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
-        )
+        _, _, yaw = euler_from_quaternion([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
 
         # IMU 초기 yaw 값을 설정
         if self.initial_yaw is None:
@@ -63,6 +61,9 @@ class SensorSyncNode(Node):
         imu_msg.orientation.y = adjusted_orientation_q[1]
         imu_msg.orientation.z = adjusted_orientation_q[2]
         imu_msg.orientation.w = adjusted_orientation_q[3]
+
+        # 보정된 IMU 데이터의 타임스탬프를 원본 타임스탬프로 유지
+        imu_msg.header.stamp = imu_msg.header.stamp
 
         return imu_msg
 

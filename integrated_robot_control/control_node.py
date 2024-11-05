@@ -19,8 +19,15 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu  # 추가: IMU 데이터를 받기 위함
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from rclpy.qos import QoSProfile
-
+import struct
 import binascii
+
+MESSAGE_FORMAT = '<HfffffffHH'  # 리틀 엔디언, 구조체 포맷
+CONTROL_MESSAGE_FORMAT = '<HffHH'  # '<'는 리틀 엔디언을 의미합니다.
+MESSAGE_SIZE = struct.calcsize(MESSAGE_FORMAT)
+
+Linear = 0.8
+Angular = 0.2
 
 @dataclass
 class SerialStatus:
@@ -34,17 +41,17 @@ class SerialStatus:
     w: float
     
 
-def calculate_crc(data: str) -> int:
-    """Calculate CRC-16-CCITT for the given data string."""
+# CRC 계산 함수 수정
+def calculate_crc(data: bytes) -> int:
     crc = 0xFFFF
-    for byte in data.encode('utf-8'):
+    for byte in data:
         crc ^= byte << 8
         for _ in range(8):
             if crc & 0x8000:
-                crc = (crc << 1) ^ 0x1021
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF
             else:
-                crc <<= 1
-    return crc & 0xFFFF
+                crc = (crc << 1) & 0xFFFF
+    return crc
 
 
 class RobotControlNode(Node):
@@ -62,8 +69,10 @@ class RobotControlNode(Node):
 
         time.sleep(0.2)
         self.port = self.get_parameter('pico_port').get_parameter_value().string_value
-        self.ser = serial.Serial(self.port, baudrate=9600, timeout=1)
+        self.ser = serial.Serial(self.port, baudrate=115200, timeout=1)
         self.get_logger().info(f'Using serial port {self.ser.name}')
+        self.ser.write(b"$")
+        self.get_logger().info(f'Pico data was initialized!...')
         self.twist = Twist()
         self.linear_velocity = 0.0
         self.angular_velocity = 0.0
@@ -157,93 +166,127 @@ class RobotControlNode(Node):
         # # broadcast and publish
         # self.tf_broadcaster.sendTransform(t)
 
-    def send_command(self, linear: float, angular: float) -> SerialStatus:
-        command = f'{linear:.3f},{angular:.3f}/'.encode('UTF-8')
-        self.ser.reset_input_buffer()
-        self.ser.write(command)
-        
+    def receive_message(self) -> SerialStatus:
         start_time = time.time()
-        while self.ser.in_waiting == 0:
-            if time.time() - start_time > 0.05:
-                self.get_logger().warn('Timeout waiting for data')
-                self.total_data_count += 1  # 수신 실패도 전체 데이터로 계산
-                self.cumulative_total_data_count += 1  # 누적 총 데이터에도 포함
+        buffer = bytearray()
+        message_found = False
+
+        while True:
+            if self.ser.in_waiting:
+                buffer.extend(self.ser.read(self.ser.in_waiting))
+
+                # 메시지의 시작(ctx)와 끝(ext) 위치를 찾음
+                while len(buffer) >= 2:
+                    # 시작 표시자(ctx)를 찾음
+                    ctx_index = buffer.find(b'\x34\x12')  # 0x1234를 리틀 엔디언으로 표현
+                    if ctx_index == -1:
+                        # 시작 표시자가 없으면 버퍼의 데이터를 버림
+                        buffer = bytearray()
+                        break
+                    else:
+                        # 시작 표시자 이후의 데이터를 처리
+                        if len(buffer) >= ctx_index + MESSAGE_SIZE:
+                            # 충분한 데이터가 버퍼에 있음
+                            potential_message = buffer[ctx_index:ctx_index + MESSAGE_SIZE]
+                            # 종료 표시자(ext)를 확인
+                            ext_value = potential_message[-2:]
+                            if ext_value != b'\x78\x56':  # 0x5678을 리틀 엔디언으로 표현
+                                # 종료 표시자가 맞지 않으면 시작 위치 이후부터 다시 찾음
+                                buffer = buffer[ctx_index + 2:]
+                                continue
+                            else:
+                                # 메시지 발견
+                                message_found = True
+                                break
+                        else:
+                            # 데이터가 충분하지 않으면 추가 수신을 기다림
+                            break
+
+            # 메시지를 찾았으면 파싱 시작
+            if message_found:
+                break
+
+            # 타임아웃 처리
+            if time.time() - start_time > 0.5:  # 적절한 타임아웃 시간 설정
+                self.get_logger().warn('Timeout waiting for message')
                 return None
-            time.sleep(0.02)
+            time.sleep(0.001)  # 짧은 시간 대기
 
-        res = self.ser.read(self.ser.in_waiting).decode('UTF-8').strip()
-        self.total_data_count += 1  # 수신된 데이터 수에 포함
-        self.cumulative_total_data_count += 1  # 누적 총 데이터에도 포함
-
-        try:
-            # '/'로 입력값과 데이터 나누기
-            if '/' in res:
-                input_part, received_data = res.split('/', 1)
-            else:
-                self.get_logger().warn(f'Invalid format, missing "/": "{res}"')
-                return None
-
-            # CRC 분리 및 데이터 유효성 검사
-            if ',' in received_data:
-                data_part, received_crc = received_data.rsplit(',', 1)
-                received_crc = int(received_crc.strip(), 16)  # 16진수로 CRC 변환
-            else:
-                self.get_logger().warn(f'Invalid format, missing CRC: "{received_data}"')
-                return None
-            
-            # self.get_logger().info(f'[{input_part}]/[{data_part}],[{received_crc}]')
-
-            # CRC Calculate
-            calculated_crc = calculate_crc(data_part)
-            if received_crc != calculated_crc:
-                self.get_logger().error(f'CRC mismatch: expected {calculated_crc:04X}, got {received_crc:04X}')
-                return None
-
-            raw_list = data_part.strip().split(',')
-            if len(raw_list) != 7:  # 필드 수 일치 확인
-                self.get_logger().error(f'Unexpected number of elements in data: {values_list}')
-                return None
-            
-            #At this line get the message successfully.
-            values_list = [float(value) for value in raw_list]
-            self.valid_data_count += 1  # 정상 데이터 개수 증가
-            self.cumulative_valid_data_count += 1  # 누적 정상 데이터에도 포함
-
-            # === 정상 데이터 수신 시 주파수 계산 ===
-            current_time = time.time()
-            if self.last_time is not None:
-                period = current_time - self.last_time
-                hz = 1.0 / period if period > 0 else 0
-                self.avg_hz_sum += hz
-                self.avg_hz_count += 1
-
-            self.last_time = current_time
-
-            # 1초마다 평균 Hz 및 정상/전체 비율 출력
-            if current_time - self.last_log_time >= 1.0:
-                if self.avg_hz_count > 0:
-                    avg_hz = self.avg_hz_sum / self.avg_hz_count
-                    success_ratio = (self.valid_data_count / self.total_data_count) * 100
-                    cumulative_success_ratio = (self.cumulative_valid_data_count / self.cumulative_total_data_count) * 100  # 누적 성공 비율
-                    self.get_logger().info(
-                        f"[INFO] Average Hz: {avg_hz:.2f} Hz, Success Rate: {self.valid_data_count}/{self.total_data_count} ({success_ratio:.2f}%)[{cumulative_success_ratio:.2f}%]"
-                    )
-                    # 평균 Hz와 성공 비율 초기화
-                    self.avg_hz_sum = 0
-                    self.avg_hz_count = 0
-                    self.valid_data_count = 0
-                    self.total_data_count = 0
-                self.last_log_time = current_time
-            # =====================================
-        
-            return SerialStatus(*values_list)
-        except (ValueError, IndexError) as e:
-            self.get_logger().warn(f'Parsing error: "{res}" for {e}')
+        if not message_found:
+            self.get_logger().warn('Failed to find a valid message')
             return None
+
+        # 메시지 파싱
+        try:
+            msg_tuple = struct.unpack(MESSAGE_FORMAT, potential_message)
+        except struct.error as e:
+            self.get_logger().warn(f'Failed to unpack message: {e}')
+            return None
+
+        ctx = msg_tuple[0]
+        l_speed = msg_tuple[1]
+        r_speed = msg_tuple[2]
+        x_pos = msg_tuple[3]
+        y_pos = msg_tuple[4]
+        theta = msg_tuple[5]
+        v = msg_tuple[6]
+        w = msg_tuple[7]
+        crc_received = msg_tuple[8]
+        ext = msg_tuple[9]
+
+        # ctx와 ext 검증 (이미 버퍼에서 확인했으므로 생략 가능하지만 추가 검증)
+        if ctx != 0x1234 or ext != 0x5678:
+            self.get_logger().warn(f'Invalid start or end marker after unpacking: ctx={ctx:04X}, ext={ext:04X}')
+            return None
+
+        # CRC 검증
+        data_for_crc = potential_message[2:-4]  # l_speed부터 w까지의 데이터
+        crc_calculated = calculate_crc(data_for_crc)
+        if crc_received != crc_calculated:
+            self.get_logger().warn(f'CRC mismatch: expected {crc_calculated:04X}, got {crc_received:04X}')
+            return None
+
+        # 버퍼에서 사용한 데이터 제거
+        buffer = buffer[ctx_index + MESSAGE_SIZE:]
+        return SerialStatus(
+            left_speed=l_speed,
+            right_speed=r_speed,
+            x_pos=x_pos,
+            y_pos=y_pos,
+            theta=theta,
+            v=v,
+            w=w
+        )
+
+    def send_command(self, linear: float, angular: float) -> SerialStatus:
+
+        # ControlMessage 생성
+        ctx = 0x1234
+        ext = 0x5678
+
+        # 데이터 필드를 바이너리로 패킹하기 전에 CRC를 계산할 데이터 준비
+        data_for_crc = struct.pack('<ff', linear, angular)
+        crc = calculate_crc(data_for_crc)
+
+        # 전체 메시지를 패킹
+        message = struct.pack(CONTROL_MESSAGE_FORMAT, ctx, linear, angular, crc, ext)
+
+        # 메시지 전송
+        self.ser.reset_input_buffer()
+        self.ser.write(message)
+        self.ser.flush()
+
+        # 메시지 수신
+        robot_state = self.receive_message()
+        if robot_state is None:
+            self.get_logger().warn('Failed to receive valid robot state')
+            return None
+
+        # 추가 처리 (예: 로그 출력 등)
+        return robot_state
 
     def twist_callback(self, twist: Twist):
             self.twist = twist
-            # self.get_logger().info(f'[Receive twist] {twist.linear.x:.3f}, {twist.angular.z:.3f}')
 
 
 def main(args=None):
