@@ -139,3 +139,12 @@ ekf_filter_node:
 1. CRC was used to check message was fully transfered.  
 2. ctx, etx was added to the message to check the start point of it.  
 3. Message transfer rate was almost up to 100%.  
+
+* Version : v.1.2
+* Date : 2024-11-06
+
+#### Goal
+* Message transfer rate was going down becuased of path related logic
+
+1. path_node.py was add to remain robot path.
+2. control_node.py was edited.

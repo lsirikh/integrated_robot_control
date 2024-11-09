@@ -41,33 +41,33 @@ def generate_launch_description():
             default_value=rplidar_baudrate,
             description='Baud rate for rplidar sensor'
         ),
-        DeclareLaunchArgument(
-            'imu_port',
-            default_value=imu_port,
-            description='Serial port for IMU'
-        ),
-        DeclareLaunchArgument(
-            'imu_baudrate',
-            default_value=imu_baudrate,
-            description='Baud rate for IMU'
-        ),
-        DeclareLaunchArgument(
-            'config_dir',
-            default_value=config_dir,
-            description='Configuration directory'
-        ),
+        # DeclareLaunchArgument(
+        #     'imu_port',
+        #     default_value=imu_port,
+        #     description='Serial port for IMU'
+        # ),
+        # DeclareLaunchArgument(
+        #     'imu_baudrate',
+        #     default_value=imu_baudrate,
+        #     description='Baud rate for IMU'
+        # ),
+        # DeclareLaunchArgument(
+        #     'config_dir',
+        #     default_value=config_dir,
+        #     description='Configuration directory'
+        # ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 [ThisLaunchFileDir(), '/lidar.launch.py']
             ),
             launch_arguments={'serial_port': rplidar_port, 'serial_baudrate': rplidar_baudrate}.items()
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                [ThisLaunchFileDir(), '/imu.launch.py']
-            ),
-            launch_arguments={'serial_port': imu_port, 'serial_baudrate': imu_baudrate}.items()
-        ),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(
+        #         [ThisLaunchFileDir(), '/imu.launch.py']
+        #     ),
+        #     launch_arguments={'serial_port': imu_port, 'serial_baudrate': imu_baudrate}.items()
+        # ),
         Node(
             package='integrated_robot_control', executable='control_node',
             name='control_node', 
@@ -79,18 +79,21 @@ def generate_launch_description():
             name='data_report_node', 
             output='screen',
         ),
-        Node(
-            package='integrated_robot_control', executable='sensor_sync_node',
-            name='sensor_sync_node', 
-            output='screen',
-        ),
+        # Node(
+        #     package='integrated_robot_control', executable='sensor_sync_node',
+        #     name='sensor_sync_node', 
+        #     output='screen',
+        # ),
+
+
+        ######################################################################################
         # To change this node to service node - robot_control_profile Node
         # Node(
         #     package='integrated_robot_control', executable='robot_control_profile',
         #     name='robot_control_profile_node',
         #     output='screen'
         # ),
-
+        #
         # # ekf_robot_control pkg node
         # Uncertainty was too high to apply this package
         # Node(
@@ -105,36 +108,36 @@ def generate_launch_description():
         #     name='ekf_set_measurement_covariance_node',
         #     output='screen'
         # ),
-
+        ########################################################################################
      
 
-        # robot_localization EKF node
-        Node(
-            package='robot_localization',
-            executable='ekf_node',
-            name='ekf_filter_node',
-            output='screen',
-            parameters=[ekf_config],
-        ),
+        # # robot_localization EKF node
+        # Node(
+        #     package='robot_localization',
+        #     executable='ekf_node',
+        #     name='ekf_filter_node',
+        #     output='screen',
+        #     parameters=[ekf_config],
+        # ),
       
-        # nav2_amcl node
-        Node(
-            package='nav2_amcl',
-            executable='amcl',
-            name='amcl',
-            output='screen',
-            parameters=[amcl_config],
-            remappings=[('/tf', 'tf'),
-                        ('/tf_static', 'tf_static')],
-        ),
+        # # nav2_amcl node
+        # Node(
+        #     package='nav2_amcl',
+        #     executable='amcl',
+        #     name='amcl',
+        #     output='screen',
+        #     parameters=[amcl_config],
+        #     remappings=[('/tf', 'tf'),
+        #                 ('/tf_static', 'tf_static')],
+        # ),
 
-        # initialpose 퍼블리싱 노드 추가
-        Node(
-            package='integrated_robot_control',
-            executable='initialpose_node',
-            name='initialpose_node',
-            output='screen',
-        ),
+        # # initialpose 퍼블리싱 노드 추가
+        # Node(
+        #     package='integrated_robot_control',
+        #     executable='initialpose_node',
+        #     name='initialpose_node',
+        #     output='screen',
+        # ),
 
         # # imu_recorder_node 퍼블리싱 노드 추가
         # Node(
@@ -144,9 +147,18 @@ def generate_launch_description():
         #     output='screen',
         # ),
         
+         # static transform from map to odom
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='map_to_odom_static_tf',
+            arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+            output='screen'
+        ),
         # static transform for laser
         Node(
             package='tf2_ros',
+            name='laser_static_tf',
             executable='static_transform_publisher',
             arguments=['-0.12', '0', '0.28', '0', '0', '0', 'base_link', 'laser'],
             output='screen'
@@ -154,6 +166,7 @@ def generate_launch_description():
         # static transform for imu
         Node(
             package='tf2_ros',
+            name='imu_static_tf',
             executable='static_transform_publisher',
             arguments=['-0.12', '0', '0.18', '0', '0', '0', 'base_link', 'imu'],
             output='screen'
@@ -161,6 +174,7 @@ def generate_launch_description():
         # static transform from link to footprint
         Node(
             package='tf2_ros',
+            name='base_footprint_static_tf',
             executable='static_transform_publisher',
             arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_footprint'],
             output='screen'

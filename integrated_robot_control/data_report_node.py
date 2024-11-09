@@ -74,13 +74,13 @@ class DataReportNode(Node):
                                     'odom_linear_velocity_x', 'odom_linear_accel_x', 
                                     'odom_angular_velocity_z', 'odom_angular_accel_z',
 
-                                    'imu_position_x', 'imu_position_y', 'imu_orientation_yaw',
-                                    'imu_linear_velocity_x', 'imu_linear_acceleration_x',
-                                    'imu_angular_velocity_z', 'imu_linear_acceleration_z',
+                                    # 'imu_position_x', 'imu_position_y', 'imu_orientation_yaw',
+                                    # 'imu_linear_velocity_x', 'imu_linear_acceleration_x',
+                                    # 'imu_angular_velocity_z', 'imu_linear_acceleration_z',
 
-                                    'ekf_position_x', 'ekf_position_y', 'ekf_orientation_yaw',
-                                    'ekf_linear_velocity_x', 'ekf_linear_acceleration_x',
-                                    'ekf_angular_velocity_z', 'ekf_linear_acceleration_z',
+                                    # 'ekf_position_x', 'ekf_position_y', 'ekf_orientation_yaw',
+                                    # 'ekf_linear_velocity_x', 'ekf_linear_acceleration_x',
+                                    # 'ekf_angular_velocity_z', 'ekf_linear_acceleration_z',
                                     'map_x', 'map_y'
                                 ])
         # timer callback based csv logs storing process
@@ -205,28 +205,28 @@ class DataReportNode(Node):
             self.translation_y = None
 
     def save_data_to_csv(self):
-        if self.imu_data is None:
-            self.get_logger().warn('Imu data is not available yet')
-            return
+        # if self.imu_data is None:
+        #     self.get_logger().warn('Imu data is not available yet')
+        #     return
 
-        if self.odom_data is None:
-            self.get_logger().warn('Odometry data is not available yet')
-            return
+        # if self.odom_data is None:
+        #     self.get_logger().warn('Odometry data is not available yet')
+        #     return
 
-        if self.ekf_data is None:
-            self.get_logger().warn('Extended Kalman Filter data is not available yet')
-            return
+        # if self.ekf_data is None:
+        #     self.get_logger().warn('Extended Kalman Filter data is not available yet')
+        #     return
 
-        if self.translation_x is None or self.translation_y is None:
-            self.get_logger().warn('Transform data not available yet')
-            return
+        # if self.translation_x is None or self.translation_y is None:
+        #     self.get_logger().warn('Transform data not available yet')
+        #     return
 
         try:
             
             # 각 데이터의 값이 None이 아닌지 확인 후 float으로 변환
             odom_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.odom_data.values()]
-            imu_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.imu_data.values()]
-            ekf_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.ekf_data.values()]
+            # imu_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.imu_data.values()]
+            # ekf_values = [float(val) if isinstance(val, (float, int)) else 0.0 for val in self.ekf_data.values()]
 
 
             with open(self.csv_file_path, mode='a') as file:
@@ -235,10 +235,9 @@ class DataReportNode(Node):
                     # no, x, y,
                     datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
                     *["{:.4f}".format(val) for val in odom_values],
-                    *["{:.4f}".format(val) for val in imu_values],
-                    *["{:.4f}".format(val) for val in ekf_values],
+                    # *["{:.4f}".format(val) for val in imu_values],
+                    # *["{:.4f}".format(val) for val in ekf_values],
                     f'{self.translation_x:.4f}', f'{self.translation_y:.4f}' 
-                    #lidar_data_str
                 ])
 
         except Exception as e:
